@@ -59,22 +59,32 @@ export default function SessionScreen() {
 
   const handleTimerEnd = useCallback(async () => {
     try {
-      const breakEnd = new Date(Date.now() + (mission?.breakDuration ?? 5) * 60 * 1000)
-      await updateDoc(doc(db, 'missions', missionCode), { status: 'break', timerEnd: breakEnd })
-      for (const member of crew) {
+      const focusDuration = mission?.focusDuration ?? 25
+      const nextCount = (crew[0]?.sessionsCompleted ?? 0) + 1
+      const isLastRound = mission?.totalRounds && nextCount >= mission.totalRounds
+
+      const crewUpdates = crew.map(async member => {
         await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), {
-          status: 'break',
+          status: isLastRound ? 'done' : 'break',
           sessionsCompleted: (member.sessionsCompleted ?? 0) + 1,
-          totalFocusMinutes: (member.totalFocusMinutes ?? 0) + (mission?.focusDuration ?? 25),
+          totalFocusMinutes: (member.totalFocusMinutes ?? 0) + focusDuration,
         })
         await setDoc(doc(db, 'users', member.id), {
           sessionsCompleted: increment(1),
-          totalFocusMinutes: increment(mission?.focusDuration ?? 25),
+          totalFocusMinutes: increment(focusDuration),
           name: member.name,
           shipKind: member.shipKind ?? 'rocket',
           shipColorIndex: member.shipColorIndex ?? 0,
           lastSessionAt: serverTimestamp(),
         }, { merge: true })
+      })
+      await Promise.all(crewUpdates)
+
+      if (isLastRound) {
+        await updateDoc(doc(db, 'missions', missionCode), { status: 'ended' })
+      } else {
+        const breakEnd = new Date(Date.now() + (mission?.breakDuration ?? 5) * 60 * 1000)
+        await updateDoc(doc(db, 'missions', missionCode), { status: 'break', timerEnd: breakEnd })
       }
     } catch (err) {
       console.error('handleTimerEnd failed:', err)
@@ -227,8 +237,13 @@ export default function SessionScreen() {
             borderLeft: `2px solid ${ink}`,
             display: 'flex', flexDirection: 'column', gap: 12,
           }}>
-            <div style={labelTiny}>
-              FLEET · {focusingCrew.length}/{crew.length}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={labelTiny}>FLEET · {focusingCrew.length}/{crew.length}</div>
+              {mission?.totalRounds && (
+                <div style={{ ...labelTiny, color: 'oklch(0.62 0.14 260)' }}>
+                  รอบ {(crew[0]?.sessionsCompleted ?? 0) + 1}/{mission.totalRounds}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>

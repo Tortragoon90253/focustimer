@@ -77,7 +77,7 @@ export default function LobbyScreen() {
           borderBottom: 'none', borderRadius: '10px 10px 0 0',
         }}>
           {[1,2,3].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: ink, opacity: 0.2 }} />)}
-          <span style={{ marginLeft: 8, fontSize: 13, fontFamily: hand, color: muted }}>/lobby · {missionCode}</span>
+          <span style={{ marginLeft: 8, fontSize: 13, fontFamily: hand, color: muted }}>/lobby · {mission?.missionName || missionCode}</span>
         </div>
 
         {/* Main 2-column layout */}
@@ -121,8 +121,9 @@ export default function LobbyScreen() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={labelTiny}>Mission Config</div>
               {[
+                { label: 'Mission', value: mission?.missionName || '—', color: ink },
                 { label: 'Focus', value: `${mission?.focusDuration ?? 25} นาที`, color: 'oklch(0.62 0.14 260)' },
-                { label: 'Break', value: `${mission?.breakDuration ?? 5} นาที`, color: 'oklch(0.70 0.14 150)' },
+                { label: 'Rounds', value: mission?.totalRounds ? `${mission.totalRounds} รอบ` : '∞ ไม่จำกัด', color: 'oklch(0.70 0.14 150)' },
                 { label: 'Crew', value: `${crew.length} นักบิน`, color: ink },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px dashed rgba(0,0,0,0.15)` }}>
