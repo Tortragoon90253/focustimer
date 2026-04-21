@@ -1,3 +1,4 @@
+import { loadUid } from '../utils/uid'
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
@@ -29,7 +30,7 @@ function formatMinutes(mins) {
 export default function ProfileScreen() {
   const location = useLocation()
   const navigate = useNavigate()
-  const uid = location.state?.uid
+  const uid = loadUid(location.state)
 
   const [userData, setUserData] = useState(null)
   const [name, setName] = useState('')

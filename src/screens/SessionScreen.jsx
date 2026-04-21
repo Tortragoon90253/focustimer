@@ -1,6 +1,7 @@
+import { loadUid } from '../utils/uid'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { collection, doc, onSnapshot, updateDoc, setDoc, increment, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, increment, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
 
@@ -17,13 +18,16 @@ export default function SessionScreen() {
   const { missionCode } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const uid = location.state?.uid
+  const uid = loadUid(location.state)
 
   const [mission, setMission] = useState(null)
   const [crew, setCrew] = useState([])
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
+  const [musicOn, setMusicOn] = useState(false)
   const timerEndFiredRef = useRef(false)
+  const audioCtxRef = useRef(null)
+  const sourceRef = useRef(null)
 
   useEffect(() => {
     const unsubMission = onSnapshot(doc(db, 'missions', missionCode), snap => {
@@ -42,6 +46,10 @@ export default function SessionScreen() {
 
   useEffect(() => {
     if (!mission?.timerEnd) return
+    if (mission?.isPaused) {
+      setTimeLeft(mission.remainingSeconds ?? null)
+      return
+    }
     timerEndFiredRef.current = false
     const tick = () => {
       const end = mission.timerEnd.toDate ? mission.timerEnd.toDate() : new Date(mission.timerEnd)
@@ -55,7 +63,14 @@ export default function SessionScreen() {
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [mission?.timerEnd])
+  }, [mission?.timerEnd, mission?.isPaused, mission?.remainingSeconds])
+
+  useEffect(() => {
+    return () => {
+      sourceRef.current?.stop()
+      audioCtxRef.current?.close()
+    }
+  }, [])
 
   const handleTimerEnd = useCallback(async () => {
     try {
@@ -63,13 +78,14 @@ export default function SessionScreen() {
       const nextCount = (crew[0]?.sessionsCompleted ?? 0) + 1
       const isLastRound = mission?.totalRounds && nextCount >= mission.totalRounds
 
-      const crewUpdates = crew.map(async member => {
-        await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), {
+      const batch = writeBatch(db)
+      for (const member of crew) {
+        batch.update(doc(db, 'missions', missionCode, 'crew', member.id), {
           status: isLastRound ? 'done' : 'break',
           sessionsCompleted: (member.sessionsCompleted ?? 0) + 1,
           totalFocusMinutes: (member.totalFocusMinutes ?? 0) + focusDuration,
         })
-        await setDoc(doc(db, 'users', member.id), {
+        batch.set(doc(db, 'users', member.id), {
           sessionsCompleted: increment(1),
           totalFocusMinutes: increment(focusDuration),
           name: member.name,
@@ -77,20 +93,112 @@ export default function SessionScreen() {
           shipColorIndex: member.shipColorIndex ?? 0,
           lastSessionAt: serverTimestamp(),
         }, { merge: true })
-      })
-      await Promise.all(crewUpdates)
+      }
 
       if (isLastRound) {
-        await updateDoc(doc(db, 'missions', missionCode), { status: 'ended' })
+        batch.update(doc(db, 'missions', missionCode), { status: 'ended' })
       } else {
         const breakEnd = new Date(Date.now() + (mission?.breakDuration ?? 5) * 60 * 1000)
-        await updateDoc(doc(db, 'missions', missionCode), { status: 'break', timerEnd: breakEnd })
+        batch.update(doc(db, 'missions', missionCode), { status: 'break', timerEnd: breakEnd })
       }
+
+      await batch.commit()
     } catch (err) {
       console.error('handleTimerEnd failed:', err)
       timerEndFiredRef.current = false
     }
   }, [mission, crew, missionCode])
+
+  async function handlePause() {
+    if (!uid || mission?.hostId !== uid) return
+    try {
+      await updateDoc(doc(db, 'missions', missionCode), {
+        isPaused: true,
+        remainingSeconds: timeLeft,
+      })
+    } catch (err) {
+      console.error('handlePause failed:', err)
+    }
+  }
+
+  async function handleResume() {
+    if (!uid || mission?.hostId !== uid) return
+    try {
+      const remaining = mission?.remainingSeconds ?? 0
+      const newEnd = new Date(Date.now() + remaining * 1000)
+      await updateDoc(doc(db, 'missions', missionCode), {
+        isPaused: false,
+        timerEnd: newEnd,
+      })
+    } catch (err) {
+      console.error('handleResume failed:', err)
+    }
+  }
+
+  async function handleLeave() {
+    const others = crew.filter(m => m.id !== uid)
+    try {
+      if (others.length === 0) {
+        await updateDoc(doc(db, 'missions', missionCode), { status: 'ended' })
+      } else if (mission?.hostId === uid) {
+        const batch = writeBatch(db)
+        batch.update(doc(db, 'missions', missionCode), { hostId: others[0].id })
+        batch.delete(doc(db, 'missions', missionCode, 'crew', uid))
+        await batch.commit()
+      } else {
+        await deleteDoc(doc(db, 'missions', missionCode, 'crew', uid))
+      }
+      navigate('/')
+    } catch (err) {
+      console.error('handleLeave failed:', err)
+    }
+  }
+
+  function toggleMusic() {
+    if (musicOn) {
+      sourceRef.current?.stop()
+      audioCtxRef.current?.close()
+      audioCtxRef.current = null
+      sourceRef.current = null
+      setMusicOn(false)
+      return
+    }
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    audioCtxRef.current = ctx
+    const track = mission?.musicTrack ?? 'lofi'
+    const bufLen = 2 * ctx.sampleRate
+    const buffer = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    if (track === 'lofi') {
+      let lastOut = 0
+      for (let i = 0; i < bufLen; i++) {
+        const white = Math.random() * 2 - 1
+        data[i] = (lastOut + 0.02 * white) / 1.02
+        lastOut = data[i]
+        data[i] *= 3.5
+      }
+    } else {
+      for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * 0.5
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    const gain = ctx.createGain()
+    gain.gain.value = 0.15
+    if (track === 'lofi') {
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.value = 800
+      source.connect(filter)
+      filter.connect(gain)
+    } else {
+      source.connect(gain)
+    }
+    gain.connect(ctx.destination)
+    source.start()
+    sourceRef.current = source
+    setMusicOn(true)
+  }
 
   const formatTime = (secs) => {
     if (secs == null) return '--:--'
@@ -99,16 +207,20 @@ export default function SessionScreen() {
     return `${m}:${s}`
   }
 
+  const isHost = mission?.hostId === uid
+  const isPaused = mission?.isPaused ?? false
+  const musicDisabled = !mission || mission.musicTrack === 'none'
   const progress = totalSeconds && timeLeft != null ? 1 - (timeLeft / totalSeconds) : 0
   const focusingCrew = crew.filter(m => m.status === 'focusing')
 
-  // Distribute ships along the flight path based on index
-  const shipPositions = crew.map((_, i) => {
-    const total = crew.length
-    const base = (i / Math.max(total - 1, 1)) * 70 + 5
-    const yOffsets = [40, 20, 60, 30, 55, 15, 45, 25]
-    return { x: base, y: yOffsets[i % yOffsets.length] }
-  })
+  // Ships fly from left (~5%) to right (~85%) as progress advances;
+  // each ship has a formation offset so they travel in a loose cluster.
+  const formationOffsets = [0, -9, 9, -5, 5, -13, 13, -4]
+  const yOffsets = [40, 20, 60, 30, 55, 15, 48, 25]
+  const shipPositions = crew.map((_, i) => ({
+    x: Math.min(88, Math.max(5, progress * 78 + 10 + (formationOffsets[i % formationOffsets.length]))),
+    y: yOffsets[i % yOffsets.length],
+  }))
 
   return (
     <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -123,7 +235,7 @@ export default function SessionScreen() {
         }}>
           {[1,2,3].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: ink, opacity: 0.2 }} />)}
           <span style={{ marginLeft: 8, fontSize: 13, fontFamily: hand, color: muted }}>
-            mission: {missionCode} · {formatTime(timeLeft)}
+            mission: {missionCode} · {isPaused ? '⏸ paused' : formatTime(timeLeft)}
           </span>
         </div>
 
@@ -139,8 +251,11 @@ export default function SessionScreen() {
 
             {/* Big timer */}
             <div style={{ textAlign: 'center' }}>
-              <div style={labelTiny}>TIME REMAINING</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 88, lineHeight: 1, letterSpacing: '0.02em', color: ink, marginTop: 4 }}>
+              <div style={labelTiny}>{isPaused ? 'PAUSED' : 'TIME REMAINING'}</div>
+              <div style={{
+                fontFamily: 'monospace', fontSize: 88, lineHeight: 1, letterSpacing: '0.02em',
+                color: ink, marginTop: 4, opacity: isPaused ? 0.5 : 1,
+              }}>
                 {formatTime(timeLeft)}
               </div>
 
@@ -149,9 +264,9 @@ export default function SessionScreen() {
                 <div style={{
                   height: '100%',
                   width: `${progress * 100}%`,
-                  background: ink,
+                  background: isPaused ? muted : ink,
                   borderRadius: 4,
-                  transition: 'width 1s linear',
+                  transition: isPaused ? 'none' : 'width 1s linear',
                 }} />
               </div>
               <div style={{ ...labelTiny, marginTop: 6 }}>
@@ -184,12 +299,13 @@ export default function SessionScreen() {
                 return (
                   <div
                     key={member.id}
+                    className={`ship-bob-${idx % 4}`}
                     style={{
                       position: 'absolute',
                       left: `${pos.x}%`,
                       top: `${pos.y}%`,
-                      transform: 'translate(-50%, -50%)',
                       textAlign: 'center',
+                      transition: 'left 1.1s linear',
                     }}
                   >
                     <SketchShip kind={kind} size={isMe ? 52 : 44} color={color} tilt={tilt} />
@@ -208,26 +324,53 @@ export default function SessionScreen() {
 
             {/* Action buttons */}
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8 }}>
-              {[
-                { label: '⏸ Pause', disabled: true },
-                { label: '🚪 ออกจากฝูง', disabled: true },
-                { label: '🎵 lofi', disabled: true },
-              ].map(({ label, disabled }) => (
-                <button
-                  key={label}
-                  disabled={disabled}
-                  style={{
-                    padding: '8px 18px', fontFamily: hand, fontSize: 18,
-                    border: `2px solid ${ink}`, borderRadius: 8,
-                    background: 'transparent', color: ink,
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                    opacity: disabled ? 0.35 : 1,
-                    boxShadow: `2px 2px 0 ${ink}`,
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+              {/* Pause / Resume — host only */}
+              <button
+                onClick={isHost ? (isPaused ? handleResume : handlePause) : undefined}
+                disabled={!isHost}
+                style={{
+                  padding: '8px 18px', fontFamily: hand, fontSize: 18,
+                  border: `2px solid ${ink}`, borderRadius: 8,
+                  background: (isHost && isPaused) ? ink : 'transparent',
+                  color: (isHost && isPaused) ? paper : ink,
+                  cursor: isHost ? 'pointer' : 'not-allowed',
+                  opacity: isHost ? 1 : 0.35,
+                  boxShadow: `2px 2px 0 ${ink}`,
+                }}
+              >
+                {isPaused ? '▶ Resume' : '⏸ Pause'}
+              </button>
+
+              {/* Leave */}
+              <button
+                onClick={handleLeave}
+                style={{
+                  padding: '8px 18px', fontFamily: hand, fontSize: 18,
+                  border: `2px solid ${ink}`, borderRadius: 8,
+                  background: 'transparent', color: ink,
+                  cursor: 'pointer',
+                  boxShadow: `2px 2px 0 ${ink}`,
+                }}
+              >
+                🚪 ออกจากฝูง
+              </button>
+
+              {/* Music toggle */}
+              <button
+                onClick={!musicDisabled ? toggleMusic : undefined}
+                disabled={musicDisabled}
+                style={{
+                  padding: '8px 18px', fontFamily: hand, fontSize: 18,
+                  border: `2px solid ${musicOn ? 'oklch(0.62 0.14 260)' : ink}`, borderRadius: 8,
+                  background: musicOn ? 'oklch(0.62 0.14 260)' : 'transparent',
+                  color: musicOn ? paper : ink,
+                  cursor: musicDisabled ? 'not-allowed' : 'pointer',
+                  opacity: musicDisabled ? 0.35 : 1,
+                  boxShadow: `2px 2px 0 ${ink}`,
+                }}
+              >
+                {musicOn ? '🔊 lofi' : '🎵 lofi'}
+              </button>
             </div>
           </div>
 
