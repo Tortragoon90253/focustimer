@@ -29,9 +29,12 @@ export default function SessionScreen() {
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
   const [currentTrack, setCurrentTrack] = useState(() => localStorage.getItem(LS_MUSIC_KEY) ?? 'none')
+  const [explosions, setExplosions] = useState([])
   const timerEndFiredRef = useRef(false)
   const audioCtxRef = useRef(null)
   const nodesRef = useRef([])
+  const prevCrewRef = useRef([])
+  const progressRef = useRef(0)
 
   useEffect(() => {
     const unsubMission = onSnapshot(doc(db, 'missions', missionCode), snap => {
@@ -43,7 +46,16 @@ export default function SessionScreen() {
       if (data.timerEnd) setTotalSeconds((data.focusDuration ?? 25) * 60)
     })
     const unsubCrew = onSnapshot(collection(db, 'missions', missionCode, 'crew'), snap => {
-      setCrew(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      const members = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const prevCrew = prevCrewRef.current
+      if (prevCrew.length > 0) {
+        const newIds = new Set(members.map(m => m.id))
+        prevCrew.forEach((m, idx) => {
+          if (!newIds.has(m.id) && m.id !== uid) spawnExplosion(m, idx)
+        })
+      }
+      prevCrewRef.current = members
+      setCrew(members)
     })
     return () => { unsubMission(); unsubCrew() }
   }, [missionCode, uid, navigate])
@@ -240,6 +252,35 @@ export default function SessionScreen() {
     localStorage.setItem(LS_MUSIC_KEY, next)
   }
 
+  function spawnExplosion(member, crewIdx) {
+    const formationOffsets = [0, -9, 9, -5, 5, -13, 13, -4]
+    const yOffsets = [40, 20, 60, 30, 55, 15, 48, 25]
+    const prog = progressRef.current
+    const x = Math.min(88, Math.max(5, prog * 78 + 10 + formationOffsets[crewIdx % 8]))
+    const y = yOffsets[crewIdx % 8]
+    const pieces = Array.from({ length: 12 }, (_, i) => {
+      const angle = (i / 12) * Math.PI * 2 + (Math.random() - 0.5) * 0.6
+      const dist = 50 + Math.random() * 90
+      return {
+        id: i,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist,
+        dr: (Math.random() - 0.5) * 540,
+        size: 4 + Math.random() * 8,
+        delay: Math.random() * 0.12,
+        round: i % 3 === 0,
+      }
+    })
+    const id = Date.now() + Math.random()
+    setExplosions(prev => [...prev, {
+      id, x, y, pieces,
+      color: SHIP_COLORS[member.shipColorIndex ?? 0],
+      kind: member.shipKind ?? 'rocket',
+      name: member.name,
+    }])
+    setTimeout(() => setExplosions(prev => prev.filter(e => e.id !== id)), 1600)
+  }
+
   const formatTime = (secs) => {
     if (secs == null) return '--:--'
     const m = Math.floor(secs / 60).toString().padStart(2, '0')
@@ -250,6 +291,7 @@ export default function SessionScreen() {
   const isHost = mission?.hostId === uid
   const isPaused = mission?.isPaused ?? false
   const progress = totalSeconds && timeLeft != null ? 1 - (timeLeft / totalSeconds) : 0
+  progressRef.current = progress
   const focusingCrew = crew.filter(m => m.status === 'focusing')
 
   // Ships fly from left (~5%) to right (~85%) as progress advances;
@@ -314,7 +356,7 @@ export default function SessionScreen() {
             </div>
 
             {/* Fleet visualization */}
-            <div style={{ position: 'relative', height: 220, marginTop: 8 }}>
+            <div style={{ position: 'relative', height: 220, marginTop: 8, overflow: 'visible' }}>
               {/* Dashed flight path line */}
               <div style={{
                 position: 'absolute', left: '5%', right: '5%', top: '50%',
@@ -359,6 +401,46 @@ export default function SessionScreen() {
                   </div>
                 )
               })}
+
+              {/* Explosions */}
+              {explosions.map(exp => (
+                <div key={exp.id} style={{ position: 'absolute', left: `${exp.x}%`, top: `${exp.y}%`, pointerEvents: 'none', zIndex: 30 }}>
+                  {/* Shockwave ring */}
+                  <div style={{
+                    position: 'absolute', width: 56, height: 56, borderRadius: '50%',
+                    border: `3px solid ${exp.color}`,
+                    animation: 'exp-ring 0.55s ease-out forwards',
+                  }} />
+                  {/* Ship pop */}
+                  <div style={{ position: 'absolute', animation: 'exp-ship 0.55s ease-out forwards' }}>
+                    <SketchShip kind={exp.kind} size={46} color={exp.color} />
+                  </div>
+                  {/* Debris pieces */}
+                  {exp.pieces.map(p => (
+                    <div key={p.id} style={{
+                      position: 'absolute',
+                      width: p.size, height: p.size,
+                      background: exp.color,
+                      borderRadius: p.round ? '50%' : 2,
+                      border: `1px solid ${ink}`,
+                      '--dx': `${p.dx}px`,
+                      '--dy': `${p.dy}px`,
+                      '--dr': `${p.dr}deg`,
+                      animation: `exp-debris 1.4s ease-out ${p.delay}s forwards`,
+                    }} />
+                  ))}
+                  {/* Name label */}
+                  <div style={{
+                    position: 'absolute', left: '50%', top: 0,
+                    fontFamily: hand, fontSize: 14, color: exp.color,
+                    whiteSpace: 'nowrap', fontWeight: 700,
+                    textShadow: `1px 1px 0 ${ink}`,
+                    animation: 'exp-label 1.4s ease-out forwards',
+                  }}>
+                    {exp.name} 💥
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Action buttons */}
