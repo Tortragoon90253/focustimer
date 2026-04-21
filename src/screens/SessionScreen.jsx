@@ -14,6 +14,10 @@ const hand = "'Caveat', cursive"
 
 const labelTiny = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase' }
 
+const MUSIC_TRACKS = ['none', 'lofi', 'rain', 'focus', 'ambient']
+const TRACK_LABEL = { none: '🔇 ปิด', lofi: '🎵 lofi', rain: '🌧️ rain', focus: '🔮 focus', ambient: '🌌 ambient' }
+const LS_MUSIC_KEY = 'focusFleet_music'
+
 export default function SessionScreen() {
   const { missionCode } = useParams()
   const location = useLocation()
@@ -24,10 +28,10 @@ export default function SessionScreen() {
   const [crew, setCrew] = useState([])
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
-  const [musicOn, setMusicOn] = useState(false)
+  const [currentTrack, setCurrentTrack] = useState(() => localStorage.getItem(LS_MUSIC_KEY) ?? 'none')
   const timerEndFiredRef = useRef(false)
   const audioCtxRef = useRef(null)
-  const sourceRef = useRef(null)
+  const nodesRef = useRef([])
 
   useEffect(() => {
     const unsubMission = onSnapshot(doc(db, 'missions', missionCode), snap => {
@@ -66,11 +70,9 @@ export default function SessionScreen() {
   }, [mission?.timerEnd, mission?.isPaused, mission?.remainingSeconds])
 
   useEffect(() => {
-    return () => {
-      sourceRef.current?.stop()
-      audioCtxRef.current?.close()
-    }
-  }, [])
+    if (currentTrack !== 'none') startAudio(currentTrack)
+    return () => stopAudio()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTimerEnd = useCallback(async () => {
     try {
@@ -154,50 +156,88 @@ export default function SessionScreen() {
     }
   }
 
-  function toggleMusic() {
-    if (musicOn) {
-      sourceRef.current?.stop()
-      audioCtxRef.current?.close()
-      audioCtxRef.current = null
-      sourceRef.current = null
-      setMusicOn(false)
-      return
-    }
+  function stopAudio() {
+    for (const n of nodesRef.current) { try { n.stop?.(); n.disconnect?.() } catch (_) {} }
+    nodesRef.current = []
+    try { audioCtxRef.current?.close() } catch (_) {}
+    audioCtxRef.current = null
+  }
+
+  function startAudio(track) {
+    stopAudio()
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
     audioCtxRef.current = ctx
-    const track = mission?.musicTrack ?? 'lofi'
-    const bufLen = 2 * ctx.sampleRate
-    const buffer = ctx.createBuffer(1, bufLen, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
+    const dest = ctx.destination
+
     if (track === 'lofi') {
-      let lastOut = 0
+      const bufLen = 2 * ctx.sampleRate
+      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+      const d = buf.getChannelData(0)
+      let last = 0
       for (let i = 0; i < bufLen; i++) {
-        const white = Math.random() * 2 - 1
-        data[i] = (lastOut + 0.02 * white) / 1.02
-        lastOut = data[i]
-        data[i] *= 3.5
+        const w = Math.random() * 2 - 1
+        d[i] = (last + 0.02 * w) / 1.02; last = d[i]; d[i] *= 3.5
       }
-    } else {
-      for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * 0.5
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true
+      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 800
+      const gain = ctx.createGain(); gain.gain.value = 0.14
+      src.connect(filter); filter.connect(gain); gain.connect(dest)
+      src.start()
+      nodesRef.current = [src, filter, gain]
+
+    } else if (track === 'rain') {
+      const bufLen = 2 * ctx.sampleRate
+      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+      const d = buf.getChannelData(0)
+      for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true
+      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200
+      const masterGain = ctx.createGain(); masterGain.gain.value = 0.18
+      // LFO to simulate rain patter rhythm
+      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 1.2
+      const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.06
+      lfo.connect(lfoGain); lfoGain.connect(masterGain.gain)
+      src.connect(filter); filter.connect(masterGain); masterGain.connect(dest)
+      src.start(); lfo.start()
+      nodesRef.current = [src, filter, masterGain, lfo, lfoGain]
+
+    } else if (track === 'focus') {
+      // Two slightly detuned sine waves create a 10Hz beating pattern
+      const gainNode = ctx.createGain(); gainNode.gain.value = 0.08; gainNode.connect(dest)
+      const oscA = ctx.createOscillator(); oscA.type = 'sine'; oscA.frequency.value = 200
+      const oscB = ctx.createOscillator(); oscB.type = 'sine'; oscB.frequency.value = 210
+      oscA.connect(gainNode); oscB.connect(gainNode)
+      oscA.start(); oscB.start()
+      nodesRef.current = [oscA, oscB, gainNode]
+
+    } else if (track === 'ambient') {
+      // Pink noise: Paul Kellet's algorithm
+      const bufLen = 2 * ctx.sampleRate
+      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+      const d = buf.getChannelData(0)
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0
+      for (let i = 0; i < bufLen; i++) {
+        const w = Math.random() * 2 - 1
+        b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759
+        b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856
+        b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980
+        d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926
+      }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true
+      const gain = ctx.createGain(); gain.gain.value = 0.12
+      src.connect(gain); gain.connect(dest)
+      src.start()
+      nodesRef.current = [src, gain]
     }
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.loop = true
-    const gain = ctx.createGain()
-    gain.gain.value = 0.15
-    if (track === 'lofi') {
-      const filter = ctx.createBiquadFilter()
-      filter.type = 'lowpass'
-      filter.frequency.value = 800
-      source.connect(filter)
-      filter.connect(gain)
-    } else {
-      source.connect(gain)
-    }
-    gain.connect(ctx.destination)
-    source.start()
-    sourceRef.current = source
-    setMusicOn(true)
+  }
+
+  function cycleTrack() {
+    const idx = MUSIC_TRACKS.indexOf(currentTrack)
+    const next = MUSIC_TRACKS[(idx + 1) % MUSIC_TRACKS.length]
+    if (next === 'none') stopAudio()
+    else startAudio(next)
+    setCurrentTrack(next)
+    localStorage.setItem(LS_MUSIC_KEY, next)
   }
 
   const formatTime = (secs) => {
@@ -209,7 +249,6 @@ export default function SessionScreen() {
 
   const isHost = mission?.hostId === uid
   const isPaused = mission?.isPaused ?? false
-  const musicDisabled = !mission || mission.musicTrack === 'none'
   const progress = totalSeconds && timeLeft != null ? 1 - (timeLeft / totalSeconds) : 0
   const focusingCrew = crew.filter(m => m.status === 'focusing')
 
@@ -355,21 +394,20 @@ export default function SessionScreen() {
                 🚪 ออกจากฝูง
               </button>
 
-              {/* Music toggle */}
+              {/* Music cycle */}
               <button
-                onClick={!musicDisabled ? toggleMusic : undefined}
-                disabled={musicDisabled}
+                onClick={cycleTrack}
                 style={{
                   padding: '8px 18px', fontFamily: hand, fontSize: 18,
-                  border: `2px solid ${musicOn ? 'oklch(0.62 0.14 260)' : ink}`, borderRadius: 8,
-                  background: musicOn ? 'oklch(0.62 0.14 260)' : 'transparent',
-                  color: musicOn ? paper : ink,
-                  cursor: musicDisabled ? 'not-allowed' : 'pointer',
-                  opacity: musicDisabled ? 0.35 : 1,
+                  border: `2px solid ${currentTrack !== 'none' ? 'oklch(0.62 0.14 260)' : ink}`,
+                  borderRadius: 8,
+                  background: currentTrack !== 'none' ? 'oklch(0.62 0.14 260)' : 'transparent',
+                  color: currentTrack !== 'none' ? paper : ink,
+                  cursor: 'pointer',
                   boxShadow: `2px 2px 0 ${ink}`,
                 }}
               >
-                {musicOn ? '🔊 lofi' : '🎵 lofi'}
+                {TRACK_LABEL[currentTrack]}
               </button>
             </div>
           </div>

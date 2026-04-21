@@ -16,11 +16,6 @@ const labelTiny = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTra
 
 const FOCUS_PRESETS = [15, 25, 30, 45, 60]
 const ROUND_OPTIONS = [null, 1, 2, 3, 4, 5]
-const MUSIC_OPTIONS = [
-  { value: 'lofi', label: '🎵 lofi' },
-  { value: 'ambient', label: '🌌 ambient' },
-  { value: 'none', label: '🔇 ปิด' },
-]
 
 function generateCode(words) {
   return words[Math.floor(Math.random() * words.length)] + '-' + Math.floor(Math.random() * 900 + 100)
@@ -61,7 +56,6 @@ export default function MissionHubScreen() {
   const [missionName, setMissionName] = useState('')
   const [focusDuration, setFocusDuration] = useState(25)
   const [totalRounds, setTotalRounds] = useState(null)
-  const [musicTrack, setMusicTrack] = useState('lofi')
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -186,7 +180,6 @@ export default function MissionHubScreen() {
         createdAt: serverTimestamp(), timerEnd: null,
         focusDuration, breakDuration: 5,
         totalRounds: totalRounds ?? null,
-        musicTrack,
         teamCode: teamCode ?? null,
       })
       await joinMission(code)
@@ -364,16 +357,6 @@ export default function MissionHubScreen() {
               </div>
             </div>
 
-            {/* Music */}
-            <div>
-              <div style={labelTiny}>เพลงพื้นหลัง</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                {MUSIC_OPTIONS.map(m => (
-                  <Chip key={m.value} label={m.label} active={musicTrack === m.value} onClick={() => setMusicTrack(m.value)} />
-                ))}
-              </div>
-            </div>
-
             <div style={{ flex: 1 }} />
 
             {/* Summary preview */}
@@ -384,7 +367,7 @@ export default function MissionHubScreen() {
               lineHeight: 1.6,
             }}>
               📋 {missionName || 'Focus Session'} · {focusDuration}′ ×{' '}
-              {totalRounds === null ? '∞' : totalRounds} รอบ · {MUSIC_OPTIONS.find(m => m.value === musicTrack)?.label}
+              {totalRounds === null ? '∞' : totalRounds} รอบ
               {teamCode && teamData ? ` · 🏷 ${teamData.name}` : ''}
             </div>
 
