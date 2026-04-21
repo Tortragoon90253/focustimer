@@ -37,6 +37,14 @@ const SHIP_BODIES = {
 
 export const SHIP_KINDS = ['rocket', 'saucer', 'arrow', 'pod']
 export const SHIP_KIND_LABELS = { rocket: 'Falcon', saucer: 'Nimbus', arrow: 'Dart', pod: 'Pod' }
+export const SHIP_COLORS = [
+  'oklch(0.62 0.14 260)',
+  'oklch(0.72 0.16 50)',
+  'oklch(0.70 0.14 150)',
+  'oklch(0.72 0.14 0)',
+  '#caa7ff',
+  '#ffd95e',
+]
 
 export default function SketchShip({ kind = 'rocket', size = 56, color = 'oklch(0.62 0.14 260)', tilt = 0 }) {
   const bodyFn = SHIP_BODIES[kind] || SHIP_BODIES.rocket

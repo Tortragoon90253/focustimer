@@ -2,8 +2,16 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
-import StarField from '../components/StarField'
-import Ship, { getShipColor } from '../components/Ship'
+import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
+
+const ink = '#1a1a1a'
+const paper = '#faf6ee'
+const paper2 = '#f0e8d5'
+const bg = '#e8e2d2'
+const muted = '#999'
+const hand = "'Caveat', cursive"
+
+const labelTiny = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase' }
 
 export default function StatsScreen() {
   const { missionCode } = useParams()
@@ -26,145 +34,233 @@ export default function StatsScreen() {
     return () => { unsubMission(); unsubCrew() }
   }, [missionCode])
 
-  const totalSessions = crew.reduce((s, m) => s + (m.sessionsCompleted ?? 0), 0)
+  const totalSessions = Math.max(...crew.map(m => m.sessionsCompleted ?? 0), 0)
   const totalMinutes = crew.reduce((s, m) => s + (m.totalFocusMinutes ?? 0), 0)
-  const topPilot = crew[0]
   const myData = crew.find(m => m.id === uid)
+  const focusDuration = mission?.focusDuration ?? 25
+  const breakDuration = mission?.breakDuration ?? 5
+
+  const formatMinutes = (mins) => {
+    if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`
+    return `${mins}m`
+  }
+
+  // Build timeline blocks: [focus, break, focus, break, ..., focus]
+  const timelineBlocks = []
+  const totalTime = totalSessions * focusDuration + Math.max(0, totalSessions - 1) * breakDuration
+  for (let i = 0; i < totalSessions; i++) {
+    timelineBlocks.push({ type: 'focus', width: totalTime > 0 ? (focusDuration / totalTime) * 100 : 50 })
+    if (i < totalSessions - 1) {
+      timelineBlocks.push({ type: 'break', width: totalTime > 0 ? (breakDuration / totalTime) * 100 : 10 })
+    }
+  }
+  if (timelineBlocks.length === 0) {
+    timelineBlocks.push({ type: 'focus', width: 100 })
+  }
 
   const statCards = [
-    { label: 'Sessions รวม', value: totalSessions, icon: '🎯', color: '#6c8ef5' },
-    { label: 'นาที Focus รวม', value: totalMinutes, icon: '⏱️', color: '#f5c46c' },
-    { label: 'นักบินทั้งหมด', value: crew.length, icon: '🧑‍🚀', color: '#6cf5b4' },
-    { label: 'เฉลี่ยต่อคน', value: crew.length ? Math.round(totalMinutes / crew.length) + ' min' : '0 min', icon: '📊', color: '#c46cf5' },
+    { n: formatMinutes(totalMinutes), l: 'เวลารวม' },
+    { n: `${totalSessions}`, l: 'รอบสำเร็จ' },
+    { n: `${crew.length}`, l: 'ยานรอดครบ' },
+    { n: crew.length ? `${Math.round(totalMinutes / crew.length)}m` : '0m', l: 'เฉลี่ย/คน' },
   ]
 
   return (
-    <div className="relative min-h-screen flex flex-col" style={{ background: '#06060f' }}>
-      <StarField count={100} />
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 900 }}>
 
-      <div className="relative z-10 flex flex-col min-h-screen px-6 py-8 max-w-2xl mx-auto w-full">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="text-5xl mb-4">🏁</div>
-          <h1 className="font-mono text-2xl font-bold mb-1" style={{ color: '#e8e2d2' }}>
-            Mission Complete
-          </h1>
-          <div className="font-mono text-xs" style={{ color: '#6c8ef5' }}>{missionCode}</div>
+        {/* Chrome bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '8px 14px',
+          background: paper, border: `2px solid ${ink}`,
+          borderBottom: 'none', borderRadius: '10px 10px 0 0',
+        }}>
+          {[1,2,3].map(i => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: ink, opacity: 0.2 }} />)}
+          <span style={{ marginLeft: 8, fontSize: 13, fontFamily: hand, color: muted }}>summary · {missionCode}</span>
         </div>
 
-        {/* Stats cards — V1 Stats + crew */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          {statCards.map(card => (
-            <div
-              key={card.label}
-              className="rounded-2xl border p-5 flex flex-col gap-2"
-              style={{
-                background: `rgba(${hexToRgbStr(card.color)}, 0.05)`,
-                borderColor: `rgba(${hexToRgbStr(card.color)}, 0.2)`,
-              }}
-            >
-              <div className="text-2xl">{card.icon}</div>
-              <div className="font-mono text-2xl font-bold" style={{ color: card.color }}>
-                {card.value}
-              </div>
-              <div className="text-xs" style={{ color: '#6b7280' }}>{card.label}</div>
-            </div>
-          ))}
-        </div>
+        <div style={{
+          border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
+          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
+          background: paper,
+        }}>
+          <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-        {/* My stats highlight */}
-        {myData && (
-          <div
-            className="rounded-2xl border p-5 mb-6 flex items-center gap-5"
-            style={{
-              background: 'rgba(108,142,245,0.06)',
-              borderColor: 'rgba(108,142,245,0.25)',
-            }}
-          >
-            <Ship color={getShipColor(myData.shipColorIndex ?? 0)} size={52} status="done" float={false} />
-            <div className="flex-1">
-              <div className="text-xs mb-1" style={{ color: '#6b7280' }}>ผลของคุณ</div>
-              <div className="font-semibold text-base mb-1" style={{ color: '#e8e2d2' }}>{myData.name}</div>
-              <div className="flex gap-4 text-sm">
-                <span style={{ color: '#6c8ef5' }}>
-                  <span className="font-mono font-bold">{myData.sessionsCompleted ?? 0}</span>
-                  <span className="text-xs ml-1" style={{ color: '#6b7280' }}>sessions</span>
-                </span>
-                <span style={{ color: '#f5c46c' }}>
-                  <span className="font-mono font-bold">{myData.totalFocusMinutes ?? 0}</span>
-                  <span className="text-xs ml-1" style={{ color: '#6b7280' }}>นาที</span>
-                </span>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={labelTiny}>MISSION COMPLETE</div>
+                <div style={{
+                  fontFamily: hand, fontSize: 44, color: ink, lineHeight: 1.1, marginTop: 4,
+                  borderBottom: `3px solid ${ink}`, paddingBottom: 2, display: 'inline-block',
+                }}>
+                  ภารกิจสำเร็จ! 🎉
+                </div>
+              </div>
+              <div style={{
+                padding: '8px 14px', background: '#ffd95e',
+                border: `1.5px solid ${ink}`, borderRadius: 4,
+                fontFamily: hand, fontSize: 16, color: ink,
+                transform: 'rotate(1deg)',
+                boxShadow: '2px 2px 0 rgba(0,0,0,0.12)',
+                maxWidth: 180, textAlign: 'center',
+              }}>
+                {missionCode}
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Crew roster */}
-        <div
-          className="rounded-2xl border p-5"
-          style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
-        >
-          <div className="text-xs mb-4 font-semibold tracking-widest" style={{ color: '#6b7280' }}>
-            CREW RANKINGS
-          </div>
-          <div className="space-y-3">
-            {crew.map((member, rank) => {
-              const color = getShipColor(member.shipColorIndex ?? rank)
-              const isMe = member.id === uid
-              const isTop = rank === 0
-              return (
+            {/* 4 stat boxes */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+              {statCards.map((s, i) => (
                 <div
-                  key={member.id}
-                  className="flex items-center gap-4 px-4 py-3 rounded-xl"
+                  key={i}
                   style={{
-                    background: isMe ? `rgba(${hexToRgbStr(color)}, 0.06)` : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${isMe ? color + '33' : 'rgba(255,255,255,0.05)'}`,
+                    padding: 14, textAlign: 'center',
+                    border: `2px solid ${ink}`, borderRadius: 8,
+                    background: i === 3 ? ink : 'transparent',
+                    boxShadow: `2px 2px 0 ${ink}`,
                   }}
                 >
-                  {/* Rank */}
-                  <div className="font-mono text-sm w-6 text-center" style={{ color: isTop ? '#f5c46c' : '#6b7280' }}>
-                    {isTop ? '👑' : `#${rank + 1}`}
-                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 30, color: i === 3 ? paper : ink }}>{s.n}</div>
+                  <div style={{ ...labelTiny, color: i === 3 ? paper + 'cc' : muted, marginTop: 4 }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
 
-                  <Ship color={color} size={32} status="done" float={false} />
+            {/* Bottom 2-column */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm truncate" style={{ color: '#e8e2d2' }}>{member.name}</span>
-                      {isMe && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: color + '22', color }}>you</span>}
-                    </div>
-                  </div>
+              {/* Left: fleet + timeline */}
+              <div style={{ border: `2px solid ${ink}`, borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-                  <div className="text-right">
-                    <div className="font-mono text-sm font-bold" style={{ color }}>
-                      {member.sessionsCompleted ?? 0}×
-                    </div>
-                    <div className="text-xs" style={{ color: '#6b7280' }}>
-                      {member.totalFocusMinutes ?? 0} min
-                    </div>
+                <div>
+                  <div style={labelTiny}>FLEET WHO MADE IT</div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
+                    {crew.map((member, idx) => {
+                      const color = SHIP_COLORS[member.shipColorIndex ?? idx % SHIP_COLORS.length]
+                      const kind = member.shipKind ?? SHIP_KINDS[idx % SHIP_KINDS.length]
+                      const isMe = member.id === uid
+                      return (
+                        <div key={member.id} style={{ textAlign: 'center' }}>
+                          <SketchShip kind={kind} size={48} color={color} />
+                          <div style={{
+                            fontFamily: hand, fontSize: 14, color: isMe ? ink : muted,
+                            marginTop: 2, fontWeight: isMe ? 700 : 400,
+                          }}>
+                            {member.name}
+                          </div>
+                          <div style={{ ...labelTiny, fontSize: 10, marginTop: 1 }}>
+                            {member.sessionsCompleted ?? 0}×
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              )
-            })}
+
+                {/* Wavy divider */}
+                <div style={{ borderTop: `1.5px dashed rgba(0,0,0,0.2)` }} />
+
+                {/* Timeline */}
+                <div>
+                  <div style={labelTiny}>TIMELINE</div>
+                  <div style={{
+                    height: 48, marginTop: 8,
+                    border: `1.5px dashed rgba(0,0,0,0.2)`,
+                    borderRadius: 4, padding: 6,
+                    position: 'relative', display: 'flex', overflow: 'hidden',
+                  }}>
+                    {timelineBlocks.map((block, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          height: '100%',
+                          width: `${block.width}%`,
+                          background: block.type === 'focus'
+                            ? 'oklch(0.62 0.14 260)'
+                            : 'oklch(0.72 0.16 50)',
+                          opacity: 0.45,
+                          borderRight: i < timelineBlocks.length - 1 ? `2px solid ${ink}` : 'none',
+                          flexShrink: 0,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <div style={{ ...labelTiny, fontSize: 10 }}>focus {focusDuration}′</div>
+                    {totalSessions > 1 && <div style={{ ...labelTiny, fontSize: 10 }}>break {breakDuration}′</div>}
+                    <div style={{ ...labelTiny, fontSize: 10 }}>รวม {formatMinutes(totalMinutes / crew.length || 0)}/คน</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: achievement + buttons */}
+              <div style={{
+                border: `2px solid ${ink}`, borderRadius: 8, padding: 16,
+                background: paper2,
+                display: 'flex', flexDirection: 'column', gap: 10,
+              }}>
+                <div style={labelTiny}>WE EARNED</div>
+
+                <div style={{ fontFamily: hand, fontSize: 24, color: ink, lineHeight: 1.2, marginTop: 4 }}>
+                  🏅 ภารกิจสำเร็จ!<br />
+                  <span style={{ fontSize: 16, color: muted }}>
+                    {totalSessions > 0 ? `${totalSessions} รอบ · ${crew.length} ลำ` : 'ยอดเยี่ยม'}
+                  </span>
+                </div>
+
+                {/* Team total */}
+                <div style={{
+                  padding: '8px 12px', background: '#ffd95e',
+                  border: `1.5px solid ${ink}`, borderRadius: 4,
+                  fontFamily: hand, fontSize: 14, color: ink,
+                  transform: 'rotate(-0.8deg)',
+                  boxShadow: '2px 2px 0 rgba(0,0,0,0.1)',
+                }}>
+                  ทีมโฟกัสรวม {formatMinutes(totalMinutes)} ครั้งนี้
+                </div>
+
+                <div style={{ flex: 1 }} />
+
+                <button
+                  onClick={() => navigate('/personal', { state: { uid } })}
+                  style={{
+                    padding: '12px', fontFamily: hand, fontSize: 20,
+                    border: `2px solid ${ink}`, borderRadius: 8,
+                    background: 'transparent', color: ink, cursor: 'pointer',
+                    boxShadow: `3px 3px 0 ${ink}`,
+                  }}
+                >
+                  📊 สถิติของฉัน
+                </button>
+                <button
+                  onClick={() => navigate(`/team/${missionCode}`, { state: { uid } })}
+                  style={{
+                    padding: '12px', fontFamily: hand, fontSize: 20,
+                    border: `2px solid ${ink}`, borderRadius: 8,
+                    background: 'transparent', color: ink, cursor: 'pointer',
+                    boxShadow: `3px 3px 0 ${ink}`,
+                  }}
+                >
+                  👥 สถิติทีม
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  style={{
+                    padding: '12px', fontFamily: hand, fontSize: 20,
+                    border: `2px solid ${ink}`, borderRadius: 8,
+                    background: ink, color: paper, cursor: 'pointer',
+                    boxShadow: `3px 3px 0 oklch(0.62 0.14 260)`,
+                  }}
+                >
+                  กลับ lobby
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Back button */}
-        <button
-          onClick={() => navigate('/')}
-          className="mt-8 w-full py-3 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#e8e2d2' }}
-        >
-          🏠 กลับหน้าหลัก
-        </button>
       </div>
     </div>
   )
-}
-
-function hexToRgbStr(hex) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `${r}, ${g}, ${b}`
 }
