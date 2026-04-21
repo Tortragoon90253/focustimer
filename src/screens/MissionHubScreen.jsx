@@ -83,7 +83,7 @@ export default function MissionHubScreen() {
     if (!uid) return
     const q = query(
       collection(db, 'missions'),
-      where('status', 'in', ['lobby', 'active', 'break']),
+      where('status', 'in', ['active', 'break']),
       limit(20)
     )
     const unsub = onSnapshot(q, snap => {
@@ -91,13 +91,12 @@ export default function MissionHubScreen() {
       const sessions = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(s => {
-          if (s.status !== 'lobby') return true  // active/break are always current
           if (!s.createdAt) return true
           const t = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt)
           return Date.now() - t.getTime() < TWO_HOURS
         })
         .sort((a, b) => {
-          const order = { active: 0, break: 1, lobby: 2 }
+          const order = { active: 0, break: 1 }
           if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status]
           const ta = a.createdAt?.toDate?.() ?? new Date(0)
           const tb = b.createdAt?.toDate?.() ?? new Date(0)
@@ -475,7 +474,6 @@ export default function MissionHubScreen() {
                     const statusMeta = {
                       active: { label: '🟢 โฟกัส', color: 'oklch(0.70 0.14 150)' },
                       break:  { label: '☕ พัก',   color: 'oklch(0.72 0.16 50)'  },
-                      lobby:  { label: '🟡 รอเริ่ม', color: 'oklch(0.72 0.16 80)' },
                     }[s.status] ?? { label: s.status, color: muted }
                     return (
                       <div
