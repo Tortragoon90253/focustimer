@@ -76,7 +76,11 @@ export default function MissionHubScreen() {
   // Team panel
   const [teamPanel, setTeamPanel] = useState(null) // null | 'create' | 'join'
   const [newTeamName, setNewTeamName] = useState('')
+  const [newTeamPassword, setNewTeamPassword] = useState('')
   const [joinTeamInput, setJoinTeamInput] = useState('')
+  const [joinTeamStep, setJoinTeamStep] = useState('code') // 'code' | 'password'
+  const [joinTeamPending, setJoinTeamPending] = useState(null) // { code, data }
+  const [joinTeamPassword, setJoinTeamPassword] = useState('')
   const [teamError, setTeamError] = useState('')
   const [teamLoading, setTeamLoading] = useState(false)
 
@@ -214,13 +218,15 @@ export default function MissionHubScreen() {
     setTeamLoading(true); setTeamError('')
     try {
       const code = generateCode(TEAM_WORDS)
-      await setDoc(doc(db, 'teams', code), {
-        name: newTeamName.trim(), createdBy: uid, createdAt: serverTimestamp(),
-      })
+      const pw = newTeamPassword.trim()
+      const teamDoc = { name: newTeamName.trim(), createdBy: uid, createdAt: serverTimestamp(), hasPassword: !!pw }
+      if (pw) teamDoc.passwordHash = await hashPassword(pw)
+      await setDoc(doc(db, 'teams', code), teamDoc)
       await setDoc(doc(db, 'users', uid), { teamCode: code }, { merge: true })
       setTeamCode(code)
       setTeamPanel(null)
       setNewTeamName('')
+      setNewTeamPassword('')
     } catch (e) {
       setTeamError('เกิดข้อผิดพลาด')
     }
@@ -234,14 +240,42 @@ export default function MissionHubScreen() {
     try {
       const snap = await getDoc(doc(db, 'teams', code))
       if (!snap.exists()) { setTeamError(`ไม่พบทีม "${code}"`); setTeamLoading(false); return }
+      const data = snap.data()
+
+      if (data.hasPassword && joinTeamStep === 'code') {
+        // Team is locked — ask for password
+        setJoinTeamPending({ code, data })
+        setJoinTeamStep('password')
+        setTeamError('')
+        setTeamLoading(false)
+        return
+      }
+
+      if (data.hasPassword && joinTeamStep === 'password') {
+        const hash = await hashPassword(joinTeamPassword.trim())
+        if (hash !== data.passwordHash) {
+          setTeamError('รหัสผ่านไม่ถูกต้อง')
+          setTeamLoading(false)
+          return
+        }
+      }
+
       await setDoc(doc(db, 'users', uid), { teamCode: code }, { merge: true })
       setTeamCode(code)
       setTeamPanel(null)
       setJoinTeamInput('')
+      setJoinTeamPassword('')
+      setJoinTeamStep('code')
+      setJoinTeamPending(null)
     } catch (e) {
       setTeamError('เกิดข้อผิดพลาด')
     }
     setTeamLoading(false)
+  }
+
+  async function hashPassword(pw) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
   }
 
   async function handleLeaveTeam() {
@@ -536,9 +570,32 @@ export default function MissionHubScreen() {
                           background: 'transparent', color: ink, outline: 'none',
                         }}
                       />
+                      <div style={{ fontFamily: hand, fontSize: 16, color: ink, marginTop: 2 }}>
+                        รหัสผ่าน <span style={{ color: muted, fontSize: 14 }}>(ไม่บังคับ)</span>
+                      </div>
+                      <input
+                        type="password"
+                        value={newTeamPassword}
+                        onChange={e => setNewTeamPassword(e.target.value)}
+                        placeholder="ปล่อยว่างไว้ถ้าไม่ต้องการ"
+                        maxLength={30}
+                        style={{
+                          padding: '8px 12px', fontFamily: hand, fontSize: 18,
+                          border: `2px dashed rgba(0,0,0,0.3)`, borderRadius: 8,
+                          background: 'transparent', color: ink, outline: 'none',
+                        }}
+                      />
+                      {newTeamPassword.trim() && (
+                        <div style={{ fontFamily: hand, fontSize: 13, color: 'oklch(0.70 0.14 150)' }}>
+                          🔒 ต้องใส่รหัสผ่านก่อนเข้าร่วมทีม
+                        </div>
+                      )}
                       {teamError && <div style={{ fontFamily: hand, fontSize: 15, color: 'oklch(0.72 0.14 0)' }}>{teamError}</div>}
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setTeamPanel(null)} style={{ padding: '8px 14px', fontFamily: hand, fontSize: 16, border: `1.5px solid ${ink}`, borderRadius: 8, background: 'transparent', cursor: 'pointer' }}>
+                        <button
+                          onClick={() => { setTeamPanel(null); setNewTeamName(''); setNewTeamPassword(''); setTeamError('') }}
+                          style={{ padding: '8px 14px', fontFamily: hand, fontSize: 16, border: `1.5px solid ${ink}`, borderRadius: 8, background: 'transparent', cursor: 'pointer' }}
+                        >
                           ยกเลิก
                         </button>
                         <button
@@ -559,23 +616,66 @@ export default function MissionHubScreen() {
 
                   {teamPanel === 'join' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ fontFamily: hand, fontSize: 16, color: ink }}>Team Code</div>
-                      <input
-                        type="text"
-                        value={joinTeamInput}
-                        onChange={e => setJoinTeamInput(e.target.value.toUpperCase())}
-                        placeholder="ALPHA-123"
-                        style={{
-                          padding: '8px 12px', fontFamily: 'monospace', fontSize: 18,
-                          border: `2px dashed rgba(0,0,0,0.3)`, borderRadius: 8,
-                          background: 'transparent', color: ink, outline: 'none',
-                          letterSpacing: '0.1em',
-                        }}
-                      />
+                      {joinTeamStep === 'code' ? (
+                        <>
+                          <div style={{ fontFamily: hand, fontSize: 16, color: ink }}>Team Code</div>
+                          <input
+                            type="text"
+                            value={joinTeamInput}
+                            onChange={e => { setJoinTeamInput(e.target.value.toUpperCase()); setTeamError('') }}
+                            onKeyDown={e => e.key === 'Enter' && handleJoinTeam()}
+                            placeholder="ALPHA-123"
+                            style={{
+                              padding: '8px 12px', fontFamily: 'monospace', fontSize: 18,
+                              border: `2px dashed rgba(0,0,0,0.3)`, borderRadius: 8,
+                              background: 'transparent', color: ink, outline: 'none',
+                              letterSpacing: '0.1em',
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '6px 10px',
+                            border: `1.5px solid rgba(0,0,0,0.15)`, borderRadius: 8,
+                            background: paper,
+                          }}>
+                            <span style={{ fontSize: 16 }}>🔒</span>
+                            <div>
+                              <div style={{ fontFamily: hand, fontSize: 17, color: ink }}>{joinTeamPending?.data?.name}</div>
+                              <div style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>{joinTeamPending?.code}</div>
+                            </div>
+                          </div>
+                          <div style={{ fontFamily: hand, fontSize: 16, color: ink }}>รหัสผ่านทีม</div>
+                          <input
+                            type="password"
+                            value={joinTeamPassword}
+                            onChange={e => { setJoinTeamPassword(e.target.value); setTeamError('') }}
+                            onKeyDown={e => e.key === 'Enter' && handleJoinTeam()}
+                            placeholder="ใส่รหัสผ่าน..."
+                            autoFocus
+                            style={{
+                              padding: '8px 12px', fontFamily: hand, fontSize: 18,
+                              border: `2px dashed rgba(0,0,0,0.3)`, borderRadius: 8,
+                              background: 'transparent', color: ink, outline: 'none',
+                            }}
+                          />
+                        </>
+                      )}
                       {teamError && <div style={{ fontFamily: hand, fontSize: 15, color: 'oklch(0.72 0.14 0)' }}>{teamError}</div>}
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setTeamPanel(null)} style={{ padding: '8px 14px', fontFamily: hand, fontSize: 16, border: `1.5px solid ${ink}`, borderRadius: 8, background: 'transparent', cursor: 'pointer' }}>
-                          ยกเลิก
+                        <button
+                          onClick={() => {
+                            if (joinTeamStep === 'password') {
+                              setJoinTeamStep('code'); setJoinTeamPending(null); setJoinTeamPassword(''); setTeamError('')
+                            } else {
+                              setTeamPanel(null); setJoinTeamInput(''); setTeamError('')
+                            }
+                          }}
+                          style={{ padding: '8px 14px', fontFamily: hand, fontSize: 16, border: `1.5px solid ${ink}`, borderRadius: 8, background: 'transparent', cursor: 'pointer' }}
+                        >
+                          {joinTeamStep === 'password' ? '← ย้อนกลับ' : 'ยกเลิก'}
                         </button>
                         <button
                           onClick={handleJoinTeam}
@@ -587,7 +687,7 @@ export default function MissionHubScreen() {
                             opacity: teamLoading ? 0.6 : 1,
                           }}
                         >
-                          {teamLoading ? 'กำลังเข้าร่วม...' : 'เข้าร่วม'}
+                          {teamLoading ? '...' : joinTeamStep === 'code' ? 'ค้นหาทีม' : 'เข้าร่วม'}
                         </button>
                       </div>
                     </div>
