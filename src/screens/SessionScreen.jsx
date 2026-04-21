@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { collection, doc, onSnapshot, updateDoc, setDoc, increment, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -23,6 +23,7 @@ export default function SessionScreen() {
   const [crew, setCrew] = useState([])
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
+  const timerEndFiredRef = useRef(false)
 
   useEffect(() => {
     const unsubMission = onSnapshot(doc(db, 'missions', missionCode), snap => {
@@ -41,11 +42,15 @@ export default function SessionScreen() {
 
   useEffect(() => {
     if (!mission?.timerEnd) return
+    timerEndFiredRef.current = false
     const tick = () => {
       const end = mission.timerEnd.toDate ? mission.timerEnd.toDate() : new Date(mission.timerEnd)
       const diff = Math.max(0, Math.floor((end - Date.now()) / 1000))
       setTimeLeft(diff)
-      if (diff === 0 && mission?.hostId === uid) handleTimerEnd()
+      if (diff === 0 && mission?.hostId === uid && !timerEndFiredRef.current) {
+        timerEndFiredRef.current = true
+        handleTimerEnd()
+      }
     }
     tick()
     const interval = setInterval(tick, 1000)
@@ -53,22 +58,27 @@ export default function SessionScreen() {
   }, [mission?.timerEnd])
 
   const handleTimerEnd = useCallback(async () => {
-    const breakEnd = new Date(Date.now() + (mission?.breakDuration ?? 5) * 60 * 1000)
-    await updateDoc(doc(db, 'missions', missionCode), { status: 'break', timerEnd: breakEnd })
-    for (const member of crew) {
-      await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), {
-        status: 'break',
-        sessionsCompleted: (member.sessionsCompleted ?? 0) + 1,
-        totalFocusMinutes: (member.totalFocusMinutes ?? 0) + (mission?.focusDuration ?? 25),
-      })
-      await setDoc(doc(db, 'users', member.id), {
-        sessionsCompleted: increment(1),
-        totalFocusMinutes: increment(mission?.focusDuration ?? 25),
-        name: member.name,
-        shipKind: member.shipKind ?? 'rocket',
-        shipColorIndex: member.shipColorIndex ?? 0,
-        lastSessionAt: serverTimestamp(),
-      }, { merge: true })
+    try {
+      const breakEnd = new Date(Date.now() + (mission?.breakDuration ?? 5) * 60 * 1000)
+      await updateDoc(doc(db, 'missions', missionCode), { status: 'break', timerEnd: breakEnd })
+      for (const member of crew) {
+        await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), {
+          status: 'break',
+          sessionsCompleted: (member.sessionsCompleted ?? 0) + 1,
+          totalFocusMinutes: (member.totalFocusMinutes ?? 0) + (mission?.focusDuration ?? 25),
+        })
+        await setDoc(doc(db, 'users', member.id), {
+          sessionsCompleted: increment(1),
+          totalFocusMinutes: increment(mission?.focusDuration ?? 25),
+          name: member.name,
+          shipKind: member.shipKind ?? 'rocket',
+          shipColorIndex: member.shipColorIndex ?? 0,
+          lastSessionAt: serverTimestamp(),
+        }, { merge: true })
+      }
+    } catch (err) {
+      console.error('handleTimerEnd failed:', err)
+      timerEndFiredRef.current = false
     }
   }, [mission, crew, missionCode])
 

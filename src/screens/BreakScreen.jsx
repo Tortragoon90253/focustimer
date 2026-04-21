@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -26,6 +26,7 @@ export default function BreakScreen() {
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
   const chatEndRef = useRef(null)
+  const breakEndFiredRef = useRef(false)
 
   useEffect(() => {
     const unsubMission = onSnapshot(doc(db, 'missions', missionCode), snap => {
@@ -48,11 +49,15 @@ export default function BreakScreen() {
 
   useEffect(() => {
     if (!mission?.timerEnd) return
+    breakEndFiredRef.current = false
     const tick = () => {
       const end = mission.timerEnd.toDate ? mission.timerEnd.toDate() : new Date(mission.timerEnd)
       const diff = Math.max(0, Math.floor((end - Date.now()) / 1000))
       setTimeLeft(diff)
-      if (diff === 0 && mission?.hostId === uid) handleBreakEnd()
+      if (diff === 0 && mission?.hostId === uid && !breakEndFiredRef.current) {
+        breakEndFiredRef.current = true
+        handleBreakEnd()
+      }
     }
     tick()
     const interval = setInterval(tick, 1000)
@@ -63,16 +68,25 @@ export default function BreakScreen() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  async function handleBreakEnd() {
-    const focusEnd = new Date(Date.now() + (mission?.focusDuration ?? 25) * 60 * 1000)
-    await updateDoc(doc(db, 'missions', missionCode), { status: 'active', timerEnd: focusEnd })
-    for (const member of crew) {
-      await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), { status: 'focusing' })
+  const handleBreakEnd = useCallback(async () => {
+    try {
+      const focusEnd = new Date(Date.now() + (mission?.focusDuration ?? 25) * 60 * 1000)
+      await updateDoc(doc(db, 'missions', missionCode), { status: 'active', timerEnd: focusEnd })
+      for (const member of crew) {
+        await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), { status: 'focusing' })
+      }
+    } catch (err) {
+      console.error('handleBreakEnd failed:', err)
+      breakEndFiredRef.current = false
     }
-  }
+  }, [mission, crew, missionCode])
 
   async function endMission() {
-    await updateDoc(doc(db, 'missions', missionCode), { status: 'ended' })
+    try {
+      await updateDoc(doc(db, 'missions', missionCode), { status: 'ended' })
+    } catch (err) {
+      console.error('endMission failed:', err)
+    }
   }
 
   async function sendMessage(e) {

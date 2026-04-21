@@ -75,6 +75,10 @@ export default function HomeScreen() {
         status: 'ready', sessionsCompleted: 0, totalFocusMinutes: 0,
         joinedAt: serverTimestamp(),
       })
+      await setDoc(doc(db, 'users', user.uid), {
+        name: pilotName.trim(), shipKind, shipColorIndex: colorIndex,
+        sessionsCompleted: 0, totalFocusMinutes: 0,
+      }, { merge: true })
       navigate(`/lobby/${generatedCode}`, { state: { uid: user.uid } })
     } catch (e) {
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); console.error(e)
@@ -97,6 +101,10 @@ export default function HomeScreen() {
         status: 'ready', sessionsCompleted: 0, totalFocusMinutes: 0,
         joinedAt: serverTimestamp(),
       })
+      await setDoc(doc(db, 'users', user.uid), {
+        name: pilotName.trim(), shipKind, shipColorIndex: colorIndex,
+        sessionsCompleted: 0, totalFocusMinutes: 0,
+      }, { merge: true })
       navigate(`/lobby/${code}`, { state: { uid: user.uid } })
     } catch (e) {
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); console.error(e)
