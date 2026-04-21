@@ -224,6 +224,17 @@ export default function StatsScreen() {
                 <div style={{ flex: 1 }} />
 
                 <button
+                  onClick={() => navigate('/personal', { state: { uid } })}
+                  style={{
+                    padding: '12px', fontFamily: hand, fontSize: 20,
+                    border: `2px solid ${ink}`, borderRadius: 8,
+                    background: 'transparent', color: ink, cursor: 'pointer',
+                    boxShadow: `3px 3px 0 ${ink}`,
+                  }}
+                >
+                  📊 สถิติของฉัน
+                </button>
+                <button
                   onClick={() => navigate('/')}
                   style={{
                     padding: '12px', fontFamily: hand, fontSize: 20,

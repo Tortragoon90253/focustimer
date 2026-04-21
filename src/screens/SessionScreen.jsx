@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, onSnapshot, updateDoc, setDoc, increment, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
 
@@ -61,6 +61,14 @@ export default function SessionScreen() {
         sessionsCompleted: (member.sessionsCompleted ?? 0) + 1,
         totalFocusMinutes: (member.totalFocusMinutes ?? 0) + (mission?.focusDuration ?? 25),
       })
+      await setDoc(doc(db, 'users', member.id), {
+        sessionsCompleted: increment(1),
+        totalFocusMinutes: increment(mission?.focusDuration ?? 25),
+        name: member.name,
+        shipKind: member.shipKind ?? 'rocket',
+        shipColorIndex: member.shipColorIndex ?? 0,
+        lastSessionAt: serverTimestamp(),
+      }, { merge: true })
     }
   }, [mission, crew, missionCode])
 
