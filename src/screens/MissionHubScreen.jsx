@@ -2,7 +2,7 @@ import { saveUid } from '../utils/uid'
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { signInAnonymously } from 'firebase/auth'
-import { doc, setDoc, getDoc, onSnapshot, query, collection, where, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, onSnapshot, query, collection, where, limit, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import SketchShip, { SHIP_COLORS } from '../components/SketchShip'
 
@@ -70,12 +70,39 @@ export default function MissionHubScreen() {
   const [joinLoading, setJoinLoading] = useState(false)
   const [joinError, setJoinError] = useState('')
 
+  // Public lobby sessions
+  const [publicSessions, setPublicSessions] = useState([])
+
   // Team panel
   const [teamPanel, setTeamPanel] = useState(null) // null | 'create' | 'join'
   const [newTeamName, setNewTeamName] = useState('')
   const [joinTeamInput, setJoinTeamInput] = useState('')
   const [teamError, setTeamError] = useState('')
   const [teamLoading, setTeamLoading] = useState(false)
+
+  // Listen for all public lobby sessions (real-time)
+  useEffect(() => {
+    if (!uid) return
+    const q = query(collection(db, 'missions'), where('status', '==', 'lobby'), limit(20))
+    const unsub = onSnapshot(q, snap => {
+      const TWO_HOURS = 2 * 60 * 60 * 1000
+      const sessions = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(s => {
+          if (!s.createdAt) return true
+          const t = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt)
+          return Date.now() - t.getTime() < TWO_HOURS
+        })
+        .sort((a, b) => {
+          const ta = a.createdAt?.toDate?.() ?? new Date(0)
+          const tb = b.createdAt?.toDate?.() ?? new Date(0)
+          return tb - ta
+        })
+        .slice(0, 8)
+      setPublicSessions(sessions)
+    })
+    return () => unsub()
+  }, [uid])
 
   const missionCodeRef = useRef(generateCode(MISSION_WORDS))
 
@@ -357,8 +384,8 @@ export default function MissionHubScreen() {
             </div>
           </div>
 
-          {/* ===== RIGHT: Join + Team ===== */}
-          <div style={{ padding: 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* ===== RIGHT: Join + Public Sessions + Team ===== */}
+          <div style={{ padding: 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
             {/* Join by code */}
             <div>
@@ -392,6 +419,64 @@ export default function MissionHubScreen() {
                 </button>
               </div>
               {joinError && <div style={{ fontFamily: hand, fontSize: 15, color: 'oklch(0.72 0.14 0)', marginTop: 6 }}>{joinError}</div>}
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: `1.5px dashed rgba(0,0,0,0.2)` }} />
+
+            {/* Public lobby sessions */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={labelTiny}>Sessions เปิดอยู่ตอนนี้</div>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: publicSessions.length > 0 ? 'oklch(0.70 0.14 150)' : muted,
+                  boxShadow: publicSessions.length > 0 ? '0 0 6px oklch(0.70 0.14 150)' : 'none',
+                }} />
+              </div>
+
+              {publicSessions.length === 0 ? (
+                <div style={{
+                  padding: '14px 0', textAlign: 'center',
+                  fontFamily: hand, fontSize: 15, color: muted,
+                }}>
+                  ยังไม่มี session ที่เปิดอยู่ 🛸
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {publicSessions.map(s => (
+                    <div
+                      key={s.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '8px 10px',
+                        border: `1.5px solid rgba(0,0,0,0.15)`, borderRadius: 8,
+                        background: paper,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontFamily: hand, fontSize: 17, color: ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {s.missionName || s.id}
+                        </div>
+                        <div style={{ fontFamily: hand, fontSize: 12, color: muted, marginTop: 1 }}>
+                          {s.focusDuration}′ × {s.totalRounds ?? '∞'} · <span style={{ fontFamily: 'monospace' }}>{s.id}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => joinMission(s.id)}
+                        style={{
+                          marginLeft: 8, flexShrink: 0,
+                          padding: '5px 12px', fontFamily: hand, fontSize: 15,
+                          border: `1.5px solid ${ink}`, borderRadius: 8,
+                          background: ink, color: paper, cursor: 'pointer',
+                        }}
+                      >
+                        เข้าร่วม
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Divider */}
