@@ -5,6 +5,7 @@ import SessionScreen from './screens/SessionScreen'
 import BreakScreen from './screens/BreakScreen'
 import StatsScreen from './screens/StatsScreen'
 import PersonalScreen from './screens/PersonalScreen'
+import TeamScreen from './screens/TeamScreen'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/break/:missionCode" element={<BreakScreen />} />
         <Route path="/stats/:missionCode" element={<StatsScreen />} />
         <Route path="/personal" element={<PersonalScreen />} />
+        <Route path="/team/:missionCode" element={<TeamScreen />} />
       </Routes>
     </HashRouter>
   )
