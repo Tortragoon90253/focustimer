@@ -213,12 +213,14 @@ export default function SessionScreen() {
   const progress = totalSeconds && timeLeft != null ? 1 - (timeLeft / totalSeconds) : 0
   const focusingCrew = crew.filter(m => m.status === 'focusing')
 
-  const shipPositions = crew.map((_, i) => {
-    const total = crew.length
-    const base = (i / Math.max(total - 1, 1)) * 70 + 5
-    const yOffsets = [40, 20, 60, 30, 55, 15, 45, 25]
-    return { x: base, y: yOffsets[i % yOffsets.length] }
-  })
+  // Ships fly from left (~5%) to right (~85%) as progress advances;
+  // each ship has a formation offset so they travel in a loose cluster.
+  const formationOffsets = [0, -9, 9, -5, 5, -13, 13, -4]
+  const yOffsets = [40, 20, 60, 30, 55, 15, 48, 25]
+  const shipPositions = crew.map((_, i) => ({
+    x: Math.min(88, Math.max(5, progress * 78 + 10 + (formationOffsets[i % formationOffsets.length]))),
+    y: yOffsets[i % yOffsets.length],
+  }))
 
   return (
     <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -297,12 +299,13 @@ export default function SessionScreen() {
                 return (
                   <div
                     key={member.id}
+                    className={`ship-bob-${idx % 4}`}
                     style={{
                       position: 'absolute',
                       left: `${pos.x}%`,
                       top: `${pos.y}%`,
-                      transform: 'translate(-50%, -50%)',
                       textAlign: 'center',
+                      transition: 'left 1.1s linear',
                     }}
                   >
                     <SketchShip kind={kind} size={isMe ? 52 : 44} color={color} tilt={tilt} />

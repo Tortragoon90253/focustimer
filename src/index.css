@@ -51,6 +51,16 @@ body {
   100% { transform: scale(2.5); opacity: 0; }
 }
 
+/* Session screen – ship bob animations (4 staggered variants) */
+@keyframes ship-bob {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+  50%       { transform: translate(-50%, -50%) translateY(-12px); }
+}
+.ship-bob-0 { animation: ship-bob 3.0s ease-in-out infinite 0.0s; }
+.ship-bob-1 { animation: ship-bob 3.6s ease-in-out infinite 0.7s; }
+.ship-bob-2 { animation: ship-bob 2.8s ease-in-out infinite 1.4s; }
+.ship-bob-3 { animation: ship-bob 3.3s ease-in-out infinite 0.4s; }
+
 .ship-float { animation: float 3s ease-in-out infinite; }
 .engine-pulse { animation: engine-pulse 0.6s ease-in-out infinite; }
 
