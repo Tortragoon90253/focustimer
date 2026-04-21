@@ -212,19 +212,31 @@ export default function PersonalScreen() {
             </div>
           </div>
 
-          {/* Back button */}
-          <button
-            onClick={() => navigate(-1)}
-            style={{
-              alignSelf: 'flex-start',
-              padding: '10px 22px', fontFamily: hand, fontSize: 19,
-              border: `2px solid ${ink}`, borderRadius: 8,
-              background: 'transparent', color: ink, cursor: 'pointer',
-              boxShadow: `2px 2px 0 ${ink}`,
-            }}
-          >
-            ← กลับ
-          </button>
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => navigate('/profile', { state: { uid } })}
+              style={{
+                padding: '10px 22px', fontFamily: hand, fontSize: 19,
+                border: `2px solid ${ink}`, borderRadius: 8,
+                background: ink, color: paper, cursor: 'pointer',
+                boxShadow: `3px 3px 0 oklch(0.62 0.14 260)`,
+              }}
+            >
+              ✏️ แก้ไขยาน
+            </button>
+            <button
+              onClick={() => navigate(-1)}
+              style={{
+                padding: '10px 22px', fontFamily: hand, fontSize: 19,
+                border: `2px solid ${ink}`, borderRadius: 8,
+                background: 'transparent', color: ink, cursor: 'pointer',
+                boxShadow: `2px 2px 0 ${ink}`,
+              }}
+            >
+              ← กลับ
+            </button>
+          </div>
         </div>
       </div>
     </div>
