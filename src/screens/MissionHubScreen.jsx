@@ -78,27 +78,34 @@ export default function MissionHubScreen() {
   const [teamError, setTeamError] = useState('')
   const [teamLoading, setTeamLoading] = useState(false)
 
-  // Listen for all public lobby sessions (real-time)
+  // Listen for all live sessions (lobby + active + break)
   useEffect(() => {
     if (!uid) return
-    const q = query(collection(db, 'missions'), where('status', '==', 'lobby'), limit(20))
+    const q = query(
+      collection(db, 'missions'),
+      where('status', 'in', ['lobby', 'active', 'break']),
+      limit(20)
+    )
     const unsub = onSnapshot(q, snap => {
       const TWO_HOURS = 2 * 60 * 60 * 1000
       const sessions = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(s => {
+          if (s.status !== 'lobby') return true  // active/break are always current
           if (!s.createdAt) return true
           const t = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt)
           return Date.now() - t.getTime() < TWO_HOURS
         })
         .sort((a, b) => {
+          const order = { active: 0, break: 1, lobby: 2 }
+          if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status]
           const ta = a.createdAt?.toDate?.() ?? new Date(0)
           const tb = b.createdAt?.toDate?.() ?? new Date(0)
           return tb - ta
         })
         .slice(0, 8)
       setPublicSessions(sessions)
-    })
+    }, err => console.error('publicSessions snapshot error:', err))
     return () => unsub()
   }, [uid])
 
@@ -159,14 +166,17 @@ export default function MissionHubScreen() {
   const colorIndex = pilot.colorIndex ?? 0
   const shipColor = SHIP_COLORS[colorIndex]
 
-  async function joinMission(code) {
+  async function joinMission(code, sessionStatus = 'lobby') {
     if (!uid) return
     await setDoc(doc(db, 'missions', code, 'crew', uid), {
       name: pilotName, shipKind, shipColorIndex: colorIndex,
-      status: 'ready', sessionsCompleted: 0, totalFocusMinutes: 0,
+      status: sessionStatus === 'lobby' ? 'ready' : 'focusing',
+      sessionsCompleted: 0, totalFocusMinutes: 0,
       joinedAt: serverTimestamp(),
     })
-    navigate(`/lobby/${code}`, { state: { uid } })
+    if (sessionStatus === 'active') navigate(`/session/${code}`, { state: { uid } })
+    else if (sessionStatus === 'break') navigate(`/break/${code}`, { state: { uid } })
+    else navigate(`/lobby/${code}`, { state: { uid } })
   }
 
   async function handleCreateSession() {
@@ -461,37 +471,49 @@ export default function MissionHubScreen() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {publicSessions.map(s => (
-                    <div
-                      key={s.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '8px 10px',
-                        border: `1.5px solid rgba(0,0,0,0.15)`, borderRadius: 8,
-                        background: paper,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontFamily: hand, fontSize: 17, color: ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {s.missionName || s.id}
-                        </div>
-                        <div style={{ fontFamily: hand, fontSize: 12, color: muted, marginTop: 1 }}>
-                          {s.focusDuration}′ × {s.totalRounds ?? '∞'} · <span style={{ fontFamily: 'monospace' }}>{s.id}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => joinMission(s.id)}
+                  {publicSessions.map(s => {
+                    const statusMeta = {
+                      active: { label: '🟢 โฟกัส', color: 'oklch(0.70 0.14 150)' },
+                      break:  { label: '☕ พัก',   color: 'oklch(0.72 0.16 50)'  },
+                      lobby:  { label: '🟡 รอเริ่ม', color: 'oklch(0.72 0.16 80)' },
+                    }[s.status] ?? { label: s.status, color: muted }
+                    return (
+                      <div
+                        key={s.id}
                         style={{
-                          marginLeft: 8, flexShrink: 0,
-                          padding: '5px 12px', fontFamily: hand, fontSize: 15,
-                          border: `1.5px solid ${ink}`, borderRadius: 8,
-                          background: ink, color: paper, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '8px 10px',
+                          border: `1.5px solid rgba(0,0,0,0.15)`, borderRadius: 8,
+                          background: paper,
                         }}
                       >
-                        เข้าร่วม
-                      </button>
-                    </div>
-                  ))}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontFamily: hand, fontSize: 17, color: ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {s.missionName || s.id}
+                            </div>
+                            <span style={{ fontFamily: hand, fontSize: 12, color: statusMeta.color, flexShrink: 0 }}>
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                          <div style={{ fontFamily: hand, fontSize: 12, color: muted, marginTop: 1 }}>
+                            {s.focusDuration}′ × {s.totalRounds ?? '∞'} · <span style={{ fontFamily: 'monospace' }}>{s.id}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => joinMission(s.id, s.status)}
+                          style={{
+                            marginLeft: 8, flexShrink: 0,
+                            padding: '5px 12px', fontFamily: hand, fontSize: 15,
+                            border: `1.5px solid ${ink}`, borderRadius: 8,
+                            background: ink, color: paper, cursor: 'pointer',
+                          }}
+                        >
+                          เข้าร่วม
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
