@@ -1,24 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signInAnonymously } from 'firebase/auth'
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '../firebase'
-import SketchShip, { SHIP_KINDS, SHIP_KIND_LABELS } from '../components/SketchShip'
-
-const SHIP_COLORS = [
-  'oklch(0.62 0.14 260)',
-  'oklch(0.72 0.16 50)',
-  'oklch(0.70 0.14 150)',
-  'oklch(0.72 0.14 0)',
-  '#caa7ff',
-  '#ffd95e',
-]
-
-function generateMissionCode() {
-  const words = ['ORION', 'VEGA', 'NOVA', 'LYRA', 'CYGNUS', 'ATLAS', 'HYDRA', 'DRACO', 'AQUILA', 'LUPUS']
-  const nums = Math.floor(Math.random() * 900 + 100)
-  return words[Math.floor(Math.random() * words.length)] + '-' + nums
-}
+import SketchShip, { SHIP_KINDS, SHIP_KIND_LABELS, SHIP_COLORS } from '../components/SketchShip'
 
 const ink = '#1a1a1a'
 const paper = '#faf6ee'
@@ -26,90 +8,20 @@ const paper2 = '#f0e8d5'
 const bg = '#e8e2d2'
 const muted = '#999'
 const hand = "'Caveat', cursive"
-
 const labelStyle = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase', marginBottom: 8 }
-const dashedInput = {
-  width: '100%', padding: '10px 14px',
-  fontFamily: hand, fontSize: 22,
-  border: `2px dashed ${ink}`, borderRadius: 8,
-  background: 'transparent', color: ink, outline: 'none',
-}
-const btnPrimary = {
-  padding: '12px 16px', fontFamily: hand, fontSize: 20,
-  border: `2px solid ${ink}`, borderRadius: 8,
-  background: ink, color: paper, cursor: 'pointer',
-  boxShadow: `3px 3px 0 oklch(0.62 0.14 260)`,
-}
-const btnGhost = {
-  padding: '10px 16px', fontFamily: hand, fontSize: 18,
-  border: `2px solid ${ink}`, borderRadius: 8,
-  background: 'transparent', color: ink, cursor: 'pointer',
-  boxShadow: `3px 3px 0 ${ink}`,
-}
 
 export default function HomeScreen() {
   const navigate = useNavigate()
   const [shipKind, setShipKind] = useState('rocket')
   const [colorIndex, setColorIndex] = useState(0)
   const [pilotName, setPilotName] = useState('')
-  const [mode, setMode] = useState(null)
-  const [missionCode, setMissionCode] = useState('')
-  const [generatedCode] = useState(generateMissionCode)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const shipColor = SHIP_COLORS[colorIndex]
 
-  async function handleCreate() {
-    if (!pilotName.trim()) return setError('ใส่ชื่อนักบินด้วย')
-    setLoading(true); setError('')
-    try {
-      const { user } = await signInAnonymously(auth)
-      await setDoc(doc(db, 'missions', generatedCode), {
-        status: 'lobby', hostId: user.uid,
-        createdAt: serverTimestamp(), timerEnd: null,
-        focusDuration: 25, breakDuration: 5,
-      })
-      await setDoc(doc(db, 'missions', generatedCode, 'crew', user.uid), {
-        name: pilotName.trim(), shipColorIndex: colorIndex, shipKind,
-        status: 'ready', sessionsCompleted: 0, totalFocusMinutes: 0,
-        joinedAt: serverTimestamp(),
-      })
-      await setDoc(doc(db, 'users', user.uid), {
-        name: pilotName.trim(), shipKind, shipColorIndex: colorIndex,
-        sessionsCompleted: 0, totalFocusMinutes: 0,
-      }, { merge: true })
-      navigate(`/lobby/${generatedCode}`, { state: { uid: user.uid } })
-    } catch (e) {
-      setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); console.error(e)
-    }
-    setLoading(false)
-  }
-
-  async function handleJoin() {
-    if (!pilotName.trim()) return setError('ใส่ชื่อนักบินด้วย')
-    if (!missionCode.trim()) return setError('ใส่ Mission Code ด้วย')
-    setLoading(true); setError('')
-    const code = missionCode.trim().toUpperCase()
-    try {
-      const snap = await getDoc(doc(db, 'missions', code))
-      if (!snap.exists()) return setError(`ไม่พบ Mission "${code}"`)
-      if (snap.data().status === 'ended') return setError('ภารกิจนี้จบไปแล้ว')
-      const { user } = await signInAnonymously(auth)
-      await setDoc(doc(db, 'missions', code, 'crew', user.uid), {
-        name: pilotName.trim(), shipColorIndex: colorIndex, shipKind,
-        status: 'ready', sessionsCompleted: 0, totalFocusMinutes: 0,
-        joinedAt: serverTimestamp(),
-      })
-      await setDoc(doc(db, 'users', user.uid), {
-        name: pilotName.trim(), shipKind, shipColorIndex: colorIndex,
-        sessionsCompleted: 0, totalFocusMinutes: 0,
-      }, { merge: true })
-      navigate(`/lobby/${code}`, { state: { uid: user.uid } })
-    } catch (e) {
-      setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); console.error(e)
-    }
-    setLoading(false)
+  function handleNext() {
+    if (!pilotName.trim()) return setError('ใส่ชื่อนักบินก่อนนะครับ')
+    navigate('/hub', { state: { pilotName: pilotName.trim(), shipKind, colorIndex } })
   }
 
   return (
@@ -121,7 +33,7 @@ export default function HomeScreen() {
         overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
       }}>
 
-        {/* Left panel */}
+        {/* Left: customization form */}
         <div style={{ padding: 32, background: paper, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Logo */}
@@ -138,7 +50,7 @@ export default function HomeScreen() {
           <div>
             <div style={labelStyle}>รูปทรงยาน</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {SHIP_KINDS.map((kind) => {
+              {SHIP_KINDS.map(kind => {
                 const active = shipKind === kind
                 return (
                   <button
@@ -153,9 +65,7 @@ export default function HomeScreen() {
                     }}
                   >
                     <SketchShip kind={kind} size={56} color={active ? shipColor : '#ccc'} />
-                    <div style={{ fontFamily: hand, fontSize: 16, color: ink, marginTop: 4 }}>
-                      {SHIP_KIND_LABELS[kind]}
-                    </div>
+                    <div style={{ fontFamily: hand, fontSize: 16, color: ink, marginTop: 4 }}>{SHIP_KIND_LABELS[kind]}</div>
                     {active && (
                       <div style={{
                         position: 'absolute', top: -8, right: -8,
@@ -170,7 +80,7 @@ export default function HomeScreen() {
             </div>
           </div>
 
-          {/* Color picker */}
+          {/* Color */}
           <div>
             <div style={labelStyle}>สี</div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -197,49 +107,39 @@ export default function HomeScreen() {
             <input
               type="text"
               value={pilotName}
-              onChange={e => setPilotName(e.target.value)}
+              onChange={e => { setPilotName(e.target.value); setError('') }}
+              onKeyDown={e => e.key === 'Enter' && handleNext()}
               placeholder="Commander ..."
               maxLength={20}
-              style={dashedInput}
+              style={{
+                width: '100%', padding: '10px 14px',
+                fontFamily: hand, fontSize: 22,
+                border: `2px dashed ${ink}`, borderRadius: 8,
+                background: 'transparent', color: ink, outline: 'none',
+                boxSizing: 'border-box',
+              }}
             />
           </div>
 
-          {/* Buttons */}
-          {!mode && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-              {error && <div style={{ fontFamily: hand, fontSize: 18, color: 'oklch(0.72 0.14 0)', textAlign: 'center' }}>{error}</div>}
-              <button onClick={handleCreate} disabled={loading} style={{ ...btnPrimary, opacity: loading ? 0.6 : 1 }}>
-                {loading ? 'กำลังสร้าง...' : '🚀 สร้าง Lobby ทันที'}
-              </button>
-              <button onClick={() => setMode('join')} style={btnGhost}>🛸 เข้าร่วมด้วย Code</button>
-            </div>
+          {error && (
+            <div style={{ fontFamily: hand, fontSize: 17, color: 'oklch(0.72 0.14 0)' }}>{error}</div>
           )}
 
-          {/* Mode: join */}
-          {mode === 'join' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <div style={labelStyle}>Mission Code</div>
-                <input
-                  type="text"
-                  value={missionCode}
-                  onChange={e => setMissionCode(e.target.value.toUpperCase())}
-                  placeholder="ORION-421"
-                  style={{ ...dashedInput, fontFamily: 'monospace', letterSpacing: '0.15em' }}
-                />
-              </div>
-              {error && <div style={{ fontFamily: hand, fontSize: 18, color: 'oklch(0.72 0.14 0)', textAlign: 'center' }}>{error}</div>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setMode(null); setError('') }} style={{ ...btnGhost, flex: '0 0 auto' }}>← ย้อน</button>
-                <button onClick={handleJoin} disabled={loading} style={{ ...btnPrimary, flex: 1, boxShadow: '3px 3px 0 oklch(0.72 0.16 50)', opacity: loading ? 0.6 : 1 }}>
-                  {loading ? 'กำลังเข้าร่วม...' : '🛸 เข้าร่วม Mission'}
-                </button>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={handleNext}
+            style={{
+              marginTop: 4, padding: '13px 16px',
+              fontFamily: hand, fontSize: 22,
+              border: `2px solid ${ink}`, borderRadius: 8,
+              background: ink, color: paper, cursor: 'pointer',
+              boxShadow: `3px 3px 0 oklch(0.62 0.14 260)`,
+            }}
+          >
+            ถัดไป →
+          </button>
         </div>
 
-        {/* Right panel - preview */}
+        {/* Right: live preview */}
         <div style={{
           padding: 24, background: paper2,
           borderLeft: `2px solid ${ink}`,
@@ -256,7 +156,7 @@ export default function HomeScreen() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
             <SketchShip kind={shipKind} size={150} color={shipColor} />
             <div style={{ fontFamily: hand, fontSize: 24, color: ink, textAlign: 'center', minHeight: 32 }}>
-              {pilotName ? pilotName : <span style={{ color: muted }}>ชื่อนักบิน</span>}
+              {pilotName || <span style={{ color: muted }}>ชื่อนักบิน</span>}
             </div>
             <div style={{
               padding: '4px 14px',
