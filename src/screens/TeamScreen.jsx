@@ -1,3 +1,4 @@
+import { loadUid } from '../utils/uid'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
@@ -24,7 +25,7 @@ export default function TeamScreen() {
   const { missionCode } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const uid = location.state?.uid
+  const uid = loadUid(location.state)
 
   const [mission, setMission] = useState(null)
   const [crew, setCrew] = useState([])

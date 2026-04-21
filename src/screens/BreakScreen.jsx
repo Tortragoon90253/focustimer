@@ -1,6 +1,7 @@
+import { loadUid } from '../utils/uid'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore'
+import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, query, orderBy, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
 
@@ -17,7 +18,7 @@ export default function BreakScreen() {
   const { missionCode } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const uid = location.state?.uid
+  const uid = loadUid(location.state)
 
   const [mission, setMission] = useState(null)
   const [crew, setCrew] = useState([])
@@ -71,10 +72,12 @@ export default function BreakScreen() {
   const handleBreakEnd = useCallback(async () => {
     try {
       const focusEnd = new Date(Date.now() + (mission?.focusDuration ?? 25) * 60 * 1000)
-      await updateDoc(doc(db, 'missions', missionCode), { status: 'active', timerEnd: focusEnd })
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'missions', missionCode), { status: 'active', timerEnd: focusEnd })
       for (const member of crew) {
-        await updateDoc(doc(db, 'missions', missionCode, 'crew', member.id), { status: 'focusing' })
+        batch.update(doc(db, 'missions', missionCode, 'crew', member.id), { status: 'focusing' })
       }
+      await batch.commit()
     } catch (err) {
       console.error('handleBreakEnd failed:', err)
       breakEndFiredRef.current = false

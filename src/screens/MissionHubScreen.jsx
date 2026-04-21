@@ -1,3 +1,4 @@
+import { saveUid } from '../utils/uid'
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { signInAnonymously } from 'firebase/auth'
@@ -82,6 +83,7 @@ export default function MissionHubScreen() {
   useEffect(() => {
     async function init() {
       const { user } = await signInAnonymously(auth)
+      saveUid(user.uid)
       setUid(user.uid)
 
       // Write pilot profile (merge so we don't wipe cumulative stats)
