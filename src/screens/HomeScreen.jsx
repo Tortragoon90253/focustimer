@@ -204,35 +204,14 @@ export default function HomeScreen() {
             />
           </div>
 
-          {/* Mode: none */}
+          {/* Buttons */}
           {!mode && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 4 }}>
-              <button onClick={() => setMode('create')} style={btnPrimary}>🚀 สร้าง Mission</button>
-              <button onClick={() => setMode('join')} style={btnGhost}>🛸 เข้าร่วม</button>
-            </div>
-          )}
-
-          {/* Mode: create */}
-          {mode === 'create' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{
-                padding: 14, borderRadius: 8, textAlign: 'center',
-                background: 'rgba(100,130,245,0.08)',
-                border: '1.5px dashed rgba(0,0,0,0.2)',
-              }}>
-                <div style={{ ...labelStyle, marginBottom: 4 }}>Mission Code</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 26, fontWeight: 700, color: 'oklch(0.62 0.14 260)' }}>
-                  {generatedCode}
-                </div>
-                <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>แชร์ code นี้ให้ทีม</div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
               {error && <div style={{ fontFamily: hand, fontSize: 18, color: 'oklch(0.72 0.14 0)', textAlign: 'center' }}>{error}</div>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setMode(null); setError('') }} style={{ ...btnGhost, flex: '0 0 auto' }}>← ย้อน</button>
-                <button onClick={handleCreate} disabled={loading} style={{ ...btnPrimary, flex: 1, opacity: loading ? 0.6 : 1 }}>
-                  {loading ? 'กำลังสร้าง...' : '🚀 เปิด Mission'}
-                </button>
-              </div>
+              <button onClick={handleCreate} disabled={loading} style={{ ...btnPrimary, opacity: loading ? 0.6 : 1 }}>
+                {loading ? 'กำลังสร้าง...' : '🚀 สร้าง Lobby ทันที'}
+              </button>
+              <button onClick={() => setMode('join')} style={btnGhost}>🛸 เข้าร่วมด้วย Code</button>
             </div>
           )}
 
