@@ -125,7 +125,7 @@ export default function LobbyScreen() {
                 { label: 'Mission', value: mission?.missionName || '—', color: ink },
                 { label: 'Focus', value: `${mission?.focusDuration ?? 25} นาที`, color: 'oklch(0.62 0.14 260)' },
                 { label: 'Rounds', value: mission?.totalRounds ? `${mission.totalRounds} รอบ` : '∞ ไม่จำกัด', color: 'oklch(0.70 0.14 150)' },
-                { label: 'Crew', value: `${crew.length} นักบิน`, color: ink },
+                { label: 'Crew', value: `${crew.length} / ${mission?.maxCrew ?? 8} นักบิน`, color: ink },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px dashed rgba(0,0,0,0.15)` }}>
                   <span style={{ fontFamily: hand, fontSize: 18, color: muted }}>{label}</span>
