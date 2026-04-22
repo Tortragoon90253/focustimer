@@ -14,8 +14,19 @@ const hand = "'Caveat', cursive"
 
 const labelTiny = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase' }
 
-const MUSIC_TRACKS = ['none', 'lofi', 'rain', 'focus', 'ambient']
-const TRACK_LABEL = { none: '🔇 ปิด', lofi: '🎵 lofi', rain: '🌧️ rain', focus: '🔮 focus', ambient: '🌌 ambient' }
+const TRACKS = [
+  { id: 'none',          label: '🔇 ปิด',        file: null },
+  { id: 'lofi-girl',     label: '🎵 lofi girl',  file: 'lofi-girl.ogg' },
+  { id: 'lofi-study',    label: '🎵 lofi study', file: 'lofi-study.ogg' },
+  { id: 'lofi-night',    label: '🌙 lofi night', file: 'lofi-night.ogg' },
+  { id: 'focus-1',       label: '🔮 focus I',    file: 'focus-1.ogg' },
+  { id: 'focus-2',       label: '🔮 focus II',   file: 'focus-2.ogg' },
+  { id: 'focus-3',       label: '🔮 focus III',  file: 'focus-3.ogg' },
+  { id: 'rain',          label: '🌧️ rain',        file: 'rain.ogg' },
+  { id: 'ambient-space', label: '🚀 space',      file: 'ambient-space.ogg' },
+  { id: 'ambient-1',     label: '🌌 ambient I',  file: 'ambient-1.ogg' },
+  { id: 'ambient-2',     label: '🌌 ambient II', file: 'ambient-2.ogg' },
+]
 const LS_MUSIC_KEY = 'focusFleet_music'
 
 export default function SessionScreen() {
@@ -28,11 +39,13 @@ export default function SessionScreen() {
   const [crew, setCrew] = useState([])
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
-  const [currentTrack, setCurrentTrack] = useState(() => localStorage.getItem(LS_MUSIC_KEY) ?? 'none')
+  const [currentTrack, setCurrentTrack] = useState(() => {
+    const stored = localStorage.getItem(LS_MUSIC_KEY) ?? 'none'
+    return TRACKS.find(t => t.id === stored) ? stored : 'none'
+  })
   const [explosions, setExplosions] = useState([])
   const timerEndFiredRef = useRef(false)
-  const audioCtxRef = useRef(null)
-  const nodesRef = useRef([])
+  const audioRef = useRef(null)
   const prevCrewRef = useRef([])
   const progressRef = useRef(0)
   const [toasts, setToasts] = useState([])
@@ -200,87 +213,30 @@ export default function SessionScreen() {
   }
 
   function stopAudio() {
-    for (const n of nodesRef.current) { try { n.stop?.(); n.disconnect?.() } catch (_) {} }
-    nodesRef.current = []
-    try { audioCtxRef.current?.close() } catch (_) {}
-    audioCtxRef.current = null
+    if (!audioRef.current) return
+    audioRef.current.pause()
+    audioRef.current.src = ''
+    audioRef.current = null
   }
 
-  function startAudio(track) {
+  function startAudio(trackId) {
     stopAudio()
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    audioCtxRef.current = ctx
-    const dest = ctx.destination
-
-    if (track === 'lofi') {
-      const bufLen = 2 * ctx.sampleRate
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
-      const d = buf.getChannelData(0)
-      let last = 0
-      for (let i = 0; i < bufLen; i++) {
-        const w = Math.random() * 2 - 1
-        d[i] = (last + 0.02 * w) / 1.02; last = d[i]; d[i] *= 3.5
-      }
-      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 800
-      const gain = ctx.createGain(); gain.gain.value = 0.14
-      src.connect(filter); filter.connect(gain); gain.connect(dest)
-      src.start()
-      nodesRef.current = [src, filter, gain]
-
-    } else if (track === 'rain') {
-      const bufLen = 2 * ctx.sampleRate
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
-      const d = buf.getChannelData(0)
-      for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1
-      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200
-      const masterGain = ctx.createGain(); masterGain.gain.value = 0.18
-      // LFO to simulate rain patter rhythm
-      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 1.2
-      const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.06
-      lfo.connect(lfoGain); lfoGain.connect(masterGain.gain)
-      src.connect(filter); filter.connect(masterGain); masterGain.connect(dest)
-      src.start(); lfo.start()
-      nodesRef.current = [src, filter, masterGain, lfo, lfoGain]
-
-    } else if (track === 'focus') {
-      // Two slightly detuned sine waves create a 10Hz beating pattern
-      const gainNode = ctx.createGain(); gainNode.gain.value = 0.08; gainNode.connect(dest)
-      const oscA = ctx.createOscillator(); oscA.type = 'sine'; oscA.frequency.value = 200
-      const oscB = ctx.createOscillator(); oscB.type = 'sine'; oscB.frequency.value = 210
-      oscA.connect(gainNode); oscB.connect(gainNode)
-      oscA.start(); oscB.start()
-      nodesRef.current = [oscA, oscB, gainNode]
-
-    } else if (track === 'ambient') {
-      // Pink noise: Paul Kellet's algorithm
-      const bufLen = 2 * ctx.sampleRate
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
-      const d = buf.getChannelData(0)
-      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0
-      for (let i = 0; i < bufLen; i++) {
-        const w = Math.random() * 2 - 1
-        b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759
-        b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856
-        b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980
-        d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926
-      }
-      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true
-      const gain = ctx.createGain(); gain.gain.value = 0.12
-      src.connect(gain); gain.connect(dest)
-      src.start()
-      nodesRef.current = [src, gain]
-    }
+    const track = TRACKS.find(t => t.id === trackId)
+    if (!track?.file) return
+    const audio = new Audio(`${import.meta.env.BASE_URL}music/${track.file}`)
+    audio.loop = true
+    audio.volume = 0.5
+    audio.play().catch(() => {})
+    audioRef.current = audio
   }
 
   function cycleTrack() {
-    const idx = MUSIC_TRACKS.indexOf(currentTrack)
-    const next = MUSIC_TRACKS[(idx + 1) % MUSIC_TRACKS.length]
-    if (next === 'none') stopAudio()
-    else startAudio(next)
-    setCurrentTrack(next)
-    localStorage.setItem(LS_MUSIC_KEY, next)
+    const idx = TRACKS.findIndex(t => t.id === currentTrack)
+    const next = TRACKS[(idx + 1) % TRACKS.length]
+    stopAudio()
+    if (next.id !== 'none') startAudio(next.id)
+    setCurrentTrack(next.id)
+    localStorage.setItem(LS_MUSIC_KEY, next.id)
   }
 
   function spawnExplosion(member, crewIdx) {
@@ -520,7 +476,7 @@ export default function SessionScreen() {
                   boxShadow: `2px 2px 0 ${ink}`,
                 }}
               >
-                {TRACK_LABEL[currentTrack]}
+                {TRACKS.find(t => t.id === currentTrack)?.label ?? '🔇 ปิด'}
               </button>
             </div>
           </div>
