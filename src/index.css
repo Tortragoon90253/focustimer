@@ -88,6 +88,12 @@ body {
 .timer-ring { transform: rotate(-90deg); }
 .timer-ring circle { transition: stroke-dashoffset 1s linear; }
 
+/* Asteroid game */
+@keyframes asteroid-fly {
+  from { transform: translateX(0) rotate(0deg); }
+  to   { transform: translateX(-140vw) rotate(540deg); }
+}
+
 /* Toast */
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-10px); }
