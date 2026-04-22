@@ -35,11 +35,30 @@ export default function SessionScreen() {
   const nodesRef = useRef([])
   const prevCrewRef = useRef([])
   const progressRef = useRef(0)
+  const [toasts, setToasts] = useState([])
+  const warned5minRef = useRef(false)
+  const prevStatusRef = useRef(null)
+  const prevHostRef = useRef(null)
+
+  const addToast = useCallback((text) => {
+    const id = Date.now() + Math.random()
+    setToasts(prev => [...prev.slice(-2), { id, text }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
+  }, [])
 
   useEffect(() => {
     const unsubMission = onSnapshot(doc(db, 'missions', missionCode), snap => {
       if (!snap.exists()) return
       const data = snap.data()
+      if (prevStatusRef.current && data.status !== prevStatusRef.current) {
+        if (data.status === 'active') addToast('🎯 เริ่มโฟกัสได้เลย!')
+        if (data.status === 'break') addToast('☕ เวลาพักแล้ว!')
+      }
+      prevStatusRef.current = data.status
+      if (prevHostRef.current && data.hostId !== prevHostRef.current && data.hostId === uid) {
+        addToast('👑 คุณเป็น Host คนใหม่')
+      }
+      prevHostRef.current = data.hostId
       setMission(data)
       if (data.status === 'break') navigate(`/break/${missionCode}`, { state: { uid } })
       if (data.status === 'ended') navigate(`/stats/${missionCode}`, { state: { uid } })
@@ -50,15 +69,22 @@ export default function SessionScreen() {
       const prevCrew = prevCrewRef.current
       if (prevCrew.length > 0) {
         const newIds = new Set(members.map(m => m.id))
+        const prevIds = new Set(prevCrew.map(m => m.id))
         prevCrew.forEach((m, idx) => {
-          if (!newIds.has(m.id) && m.id !== uid) spawnExplosion(m, idx)
+          if (!newIds.has(m.id) && m.id !== uid) {
+            spawnExplosion(m, idx)
+            addToast(`💥 ${m.name} ออกจากฝูงบิน`)
+          }
+        })
+        members.forEach(m => {
+          if (!prevIds.has(m.id) && m.id !== uid) addToast(`🚀 ${m.name} เข้าร่วมฝูงบิน`)
         })
       }
       prevCrewRef.current = members
       setCrew(members)
     })
     return () => { unsubMission(); unsubCrew() }
-  }, [missionCode, uid, navigate])
+  }, [missionCode, uid, navigate, addToast])
 
   useEffect(() => {
     if (!mission?.timerEnd) return
@@ -67,10 +93,15 @@ export default function SessionScreen() {
       return
     }
     timerEndFiredRef.current = false
+    warned5minRef.current = false
     const tick = () => {
       const end = mission.timerEnd.toDate ? mission.timerEnd.toDate() : new Date(mission.timerEnd)
       const diff = Math.max(0, Math.floor((end - Date.now()) / 1000))
       setTimeLeft(diff)
+      if (diff <= 300 && diff > 295 && !warned5minRef.current) {
+        warned5minRef.current = true
+        addToast('⏰ เหลืออีก 5 นาที')
+      }
       if (diff === 0 && mission?.hostId === uid && !timerEndFiredRef.current) {
         timerEndFiredRef.current = true
         handleTimerEnd()
@@ -542,6 +573,30 @@ export default function SessionScreen() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Toast notifications */}
+      <div style={{
+        position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8,
+        pointerEvents: 'none', alignItems: 'center',
+      }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{
+            background: 'rgba(10,10,30,0.88)',
+            border: '1.5px solid rgba(255,255,255,0.15)',
+            borderRadius: 10,
+            padding: '10px 20px',
+            color: '#e8e2d2',
+            fontFamily: 'Space Grotesk, sans-serif',
+            fontSize: 15,
+            backdropFilter: 'blur(8px)',
+            animation: 'toast-in 0.3s ease',
+            whiteSpace: 'nowrap',
+          }}>
+            {t.text}
+          </div>
+        ))}
       </div>
     </div>
   )

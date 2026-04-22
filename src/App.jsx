@@ -8,6 +8,7 @@ import StatsScreen from './screens/StatsScreen'
 import PersonalScreen from './screens/PersonalScreen'
 import TeamScreen from './screens/TeamScreen'
 import ProfileScreen from './screens/ProfileScreen'
+import AdminScreen from './screens/AdminScreen'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/personal" element={<PersonalScreen />} />
         <Route path="/team/:missionCode" element={<TeamScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
+        <Route path="/admin" element={<AdminScreen />} />
       </Routes>
     </HashRouter>
   )
