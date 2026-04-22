@@ -1,6 +1,7 @@
 import { loadUid } from '../utils/uid'
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS, SHIP_KIND_LABELS } from '../components/SketchShip'
@@ -63,13 +64,14 @@ export default function ProfileScreen() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const { isMobile } = useWindowSize()
   const color = SHIP_COLORS[colorIdx]
   const totalMinutes = userData?.totalFocusMinutes ?? 0
   const totalSessions = userData?.sessionsCompleted ?? 0
   const level = calcLevel(totalMinutes)
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 860 }}>
 
         {/* Chrome bar */}
@@ -84,16 +86,16 @@ export default function ProfileScreen() {
         </div>
 
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
-          minHeight: 520,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
+          minHeight: isMobile ? 'auto' : 520,
         }}>
 
           {/* Left: edit form */}
           <div style={{
-            padding: 28, background: paper,
-            borderRight: `2px dashed rgba(0,0,0,0.2)`,
+            padding: isMobile ? 16 : 28, background: paper,
+            borderRight: isMobile ? 'none' : `2px dashed rgba(0,0,0,0.2)`,
             display: 'flex', flexDirection: 'column', gap: 20,
           }}>
             <div style={{
@@ -232,7 +234,8 @@ export default function ProfileScreen() {
 
           {/* Right: live preview */}
           <div style={{
-            padding: 28, background: paper2,
+            padding: isMobile ? 16 : 28, background: paper2,
+            borderTop: isMobile ? `2px dashed rgba(0,0,0,0.2)` : 'none',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
             gap: 16, textAlign: 'center',

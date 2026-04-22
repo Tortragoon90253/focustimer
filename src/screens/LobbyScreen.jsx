@@ -1,6 +1,7 @@
 import { loadUid } from '../utils/uid'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS } from '../components/SketchShip'
@@ -26,6 +27,7 @@ export default function LobbyScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const uid = loadUid(location.state)
+  const { isMobile } = useWindowSize()
 
   const [mission, setMission] = useState(null)
   const [crew, setCrew] = useState([])
@@ -67,7 +69,7 @@ export default function LobbyScreen() {
   const isHost = mission?.hostId === uid
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 900 }}>
 
         {/* Chrome bar */}
@@ -83,13 +85,13 @@ export default function LobbyScreen() {
 
         {/* Main 2-column layout */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0,
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 0,
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
         }}>
 
           {/* Left: Mission info */}
-          <div style={{ padding: 28, background: paper, borderRight: `2px solid ${ink}`, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper, borderRight: isMobile ? 'none' : `2px solid ${ink}`, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             <div>
               <div style={{ fontFamily: hand, fontSize: 30, color: ink, borderBottom: `2px solid ${ink}`, paddingBottom: 4, display: 'inline-block' }}>
@@ -163,7 +165,7 @@ export default function LobbyScreen() {
           </div>
 
           {/* Right: Crew list */}
-          <div style={{ padding: 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 16, borderTop: isMobile ? `2px solid ${ink}` : 'none' }}>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontFamily: hand, fontSize: 24, color: ink }}>Crew Manifest</div>

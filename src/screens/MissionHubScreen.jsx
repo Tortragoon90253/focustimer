@@ -1,6 +1,7 @@
 import { saveUid } from '../utils/uid'
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { signInAnonymously } from 'firebase/auth'
 import { doc, setDoc, getDoc, getDocs, onSnapshot, query, collection, where, limit, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -48,6 +49,7 @@ export default function MissionHubScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const pilot = location.state ?? {}
+  const { isMobile } = useWindowSize()
 
   const [uid, setUid] = useState(null)
   const [teamCode, setTeamCode] = useState(null)
@@ -308,7 +310,7 @@ export default function MissionHubScreen() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 980 }}>
 
         {/* Chrome bar */}
@@ -328,14 +330,14 @@ export default function MissionHubScreen() {
 
         {/* Main 2-column */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 380px',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px',
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
-          minHeight: 560,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
+          minHeight: isMobile ? 'auto' : 560,
         }}>
 
           {/* ===== LEFT: Create session ===== */}
-          <div style={{ padding: 28, background: paper, display: 'flex', flexDirection: 'column', gap: 20, borderRight: `2px solid ${ink}` }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper, display: 'flex', flexDirection: 'column', gap: 20, borderRight: isMobile ? 'none' : `2px solid ${ink}` }}>
 
             <div>
               <div style={labelTiny}>STEP 2 OF 2</div>
@@ -442,7 +444,7 @@ export default function MissionHubScreen() {
           </div>
 
           {/* ===== RIGHT: Join + Public Sessions + Team ===== */}
-          <div style={{ padding: 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', borderTop: isMobile ? `2px solid ${ink}` : 'none' }}>
 
             {/* Join by code */}
             <div>

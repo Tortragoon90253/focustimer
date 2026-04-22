@@ -1,6 +1,7 @@
 import { loadUid } from '../utils/uid'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, query, orderBy, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
@@ -125,11 +126,12 @@ export default function BreakScreen() {
     return `${m}:${s}`
   }
 
+  const { isMobile } = useWindowSize()
   const isHost = mission?.hostId === uid
   const myData = crew.find(m => m.id === uid)
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 1000 }}>
 
         {/* Chrome bar */}
@@ -147,15 +149,15 @@ export default function BreakScreen() {
 
         {/* Main 2-column layout */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 360px',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 360px',
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
-          minHeight: 520,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
+          minHeight: isMobile ? 'auto' : 520,
         }}>
 
           {/* Left: timer + ships parked */}
           <div style={{
-            padding: 28, background: paper,
+            padding: isMobile ? 16 : 28, background: paper,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
             gap: 20, textAlign: 'center',
@@ -164,7 +166,7 @@ export default function BreakScreen() {
             <div style={labelTiny}>PIT STOP · ยานจอดพัก</div>
 
             {/* Big timer */}
-            <div style={{ fontFamily: 'monospace', fontSize: 84, lineHeight: 1, color: ink }}>
+            <div style={{ fontFamily: 'monospace', fontSize: isMobile ? 60 : 84, lineHeight: 1, color: ink }}>
               {formatTime(timeLeft)}
             </div>
 
@@ -245,9 +247,11 @@ export default function BreakScreen() {
 
           {/* Right: chat sidebar */}
           <div style={{
-            borderLeft: `2px solid ${ink}`,
+            borderLeft: isMobile ? 'none' : `2px solid ${ink}`,
+            borderTop: isMobile ? `2px solid ${ink}` : 'none',
             background: paper2,
             display: 'flex', flexDirection: 'column',
+            minHeight: isMobile ? 320 : 'auto',
           }}>
             {/* Chat header */}
             <div style={{ padding: '12px 16px', borderBottom: `1.5px solid ${ink}` }}>
