@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { collection, query, orderBy, onSnapshot, updateDoc, deleteDoc, doc, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? 'focusfleet-admin'
+const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME ?? 'admin'
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? '19910907'
 
 const bg = '#06060f'
 const surface = '#0e0e1e'
@@ -89,6 +90,7 @@ function ActionBtn({ onClick, color = muted, children, confirm }) {
 
 export default function AdminScreen() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem('adminAuth') === '1')
+  const [username, setUsername] = useState('')
   const [pw, setPw] = useState('')
   const [pwError, setPwError] = useState(false)
   const [missions, setMissions] = useState([])
@@ -98,7 +100,7 @@ export default function AdminScreen() {
 
   function handleLogin(e) {
     e.preventDefault()
-    if (pw === ADMIN_PASSWORD) {
+    if (username === ADMIN_USERNAME && pw === ADMIN_PASSWORD) {
       sessionStorage.setItem('adminAuth', '1')
       setAuthed(true)
       setPwError(false)
@@ -190,11 +192,25 @@ export default function AdminScreen() {
           </div>
 
           <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={e => { setUsername(e.target.value); setPwError(false) }}
+            autoFocus
+            autoComplete="username"
+            style={{
+              width: '100%', padding: '10px 14px',
+              background: surface2, border: `1px solid ${pwError ? red : border}`,
+              borderRadius: 8, color: text, fontSize: 15,
+              outline: 'none', boxSizing: 'border-box', marginBottom: 10,
+            }}
+          />
+          <input
             type="password"
-            placeholder="Admin password"
+            placeholder="Password"
             value={pw}
             onChange={e => { setPw(e.target.value); setPwError(false) }}
-            autoFocus
+            autoComplete="current-password"
             style={{
               width: '100%', padding: '10px 14px',
               background: surface2, border: `1px solid ${pwError ? red : border}`,
@@ -203,7 +219,7 @@ export default function AdminScreen() {
             }}
           />
           {pwError && (
-            <div style={{ color: red, fontSize: 13, marginBottom: 10 }}>รหัสผ่านไม่ถูกต้อง</div>
+            <div style={{ color: red, fontSize: 13, marginBottom: 10 }}>ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>
           )}
 
           <button type="submit" style={{
@@ -214,9 +230,6 @@ export default function AdminScreen() {
             เข้าสู่ระบบ
           </button>
 
-          <div style={{ color: muted, fontSize: 12, marginTop: 20, lineHeight: 1.6 }}>
-            ค่าเริ่มต้น: ตั้งค่า VITE_ADMIN_PASSWORD ใน .env
-          </div>
         </form>
       </div>
     )

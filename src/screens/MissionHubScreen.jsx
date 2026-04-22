@@ -783,6 +783,21 @@ export default function MissionHubScreen() {
             </div>
           </div>
         </div>
+
+        {/* Admin link */}
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <button
+            onClick={() => navigate('/admin')}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'rgba(0,0,0,0.2)', fontSize: 11,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              fontFamily: "'Space Grotesk', sans-serif",
+            }}
+          >
+            ⚙ Admin
+          </button>
+        </div>
       </div>
     </div>
   )
