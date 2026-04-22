@@ -1,6 +1,7 @@
 import { loadUid } from '../utils/uid'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
@@ -19,6 +20,7 @@ export default function StatsScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const uid = loadUid(location.state)
+  const { isMobile } = useWindowSize()
 
   const [mission, setMission] = useState(null)
   const [crew, setCrew] = useState([])
@@ -67,7 +69,7 @@ export default function StatsScreen() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 900 }}>
 
         {/* Chrome bar */}
@@ -93,7 +95,7 @@ export default function StatsScreen() {
               <div>
                 <div style={labelTiny}>MISSION COMPLETE</div>
                 <div style={{
-                  fontFamily: hand, fontSize: 44, color: ink, lineHeight: 1.1, marginTop: 4,
+                  fontFamily: hand, fontSize: isMobile ? 28 : 44, color: ink, lineHeight: 1.1, marginTop: 4,
                   borderBottom: `3px solid ${ink}`, paddingBottom: 2, display: 'inline-block',
                 }}>
                   ภารกิจสำเร็จ! 🎉
@@ -112,7 +114,7 @@ export default function StatsScreen() {
             </div>
 
             {/* 4 stat boxes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 10 }}>
               {statCards.map((s, i) => (
                 <div
                   key={i}
@@ -130,7 +132,7 @@ export default function StatsScreen() {
             </div>
 
             {/* Bottom 2-column */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 16 }}>
 
               {/* Left: fleet + timeline */}
               <div style={{ border: `2px solid ${ink}`, borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>

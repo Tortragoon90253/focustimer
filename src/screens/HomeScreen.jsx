@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SketchShip, { SHIP_KINDS, SHIP_KIND_LABELS, SHIP_COLORS } from '../components/SketchShip'
+import { useWindowSize } from '../hooks/useWindowSize'
 
 const ink = '#1a1a1a'
 const paper = '#faf6ee'
@@ -12,6 +13,7 @@ const labelStyle = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTr
 
 export default function HomeScreen() {
   const navigate = useNavigate()
+  const { isMobile } = useWindowSize()
   const [shipKind, setShipKind] = useState('rocket')
   const [colorIndex, setColorIndex] = useState(0)
   const [pilotName, setPilotName] = useState('')
@@ -25,12 +27,12 @@ export default function HomeScreen() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{
         width: '100%', maxWidth: 860,
-        display: 'grid', gridTemplateColumns: '1fr 260px',
+        display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px',
         border: `2px solid ${ink}`, borderRadius: 12,
-        overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
+        overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
       }}>
 
         {/* Left: customization form */}
@@ -38,7 +40,7 @@ export default function HomeScreen() {
 
           {/* Logo */}
           <div>
-            <div style={{ fontFamily: hand, fontSize: 38, color: ink, lineHeight: 1 }}>
+            <div style={{ fontFamily: hand, fontSize: isMobile ? 28 : 38, color: ink, lineHeight: 1 }}>
               focus<span style={{ color: 'oklch(0.62 0.14 260)' }}>fleet</span>
             </div>
             <div style={{ fontSize: 11, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase', marginTop: 2 }}>
@@ -49,7 +51,7 @@ export default function HomeScreen() {
           {/* Ship type */}
           <div>
             <div style={labelStyle}>รูปทรงยาน</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 8 }}>
               {SHIP_KINDS.map(kind => {
                 const active = shipKind === kind
                 return (
@@ -142,8 +144,9 @@ export default function HomeScreen() {
         {/* Right: live preview */}
         <div style={{
           padding: 24, background: paper2,
-          borderLeft: `2px solid ${ink}`,
-          display: 'flex', flexDirection: 'column',
+          borderLeft: isMobile ? 'none' : `2px solid ${ink}`,
+          borderTop: isMobile ? `2px solid ${ink}` : 'none',
+          display: 'flex', flexDirection: isMobile ? 'row' : 'column',
           alignItems: 'center', gap: 16,
           position: 'relative',
         }}>

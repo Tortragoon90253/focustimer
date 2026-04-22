@@ -1,6 +1,7 @@
 import { loadUid } from '../utils/uid'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, increment, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
@@ -275,6 +276,7 @@ export default function SessionScreen() {
     return `${m}:${s}`
   }
 
+  const { isMobile } = useWindowSize()
   const isHost = mission?.hostId === uid
   const isPaused = mission?.isPaused ?? false
   const progress = totalSeconds && timeLeft != null ? 1 - (timeLeft / totalSeconds) : 0
@@ -291,7 +293,7 @@ export default function SessionScreen() {
   }))
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 1000 }}>
 
         {/* Chrome bar */}
@@ -309,19 +311,19 @@ export default function SessionScreen() {
 
         {/* Main layout */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 280px',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 280px',
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
         }}>
 
           {/* Left: timer + fleet visualization */}
-          <div style={{ padding: 28, background: paper, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Big timer */}
             <div style={{ textAlign: 'center' }}>
               <div style={labelTiny}>{isPaused ? 'PAUSED' : 'TIME REMAINING'}</div>
               <div style={{
-                fontFamily: 'monospace', fontSize: 88, lineHeight: 1, letterSpacing: '0.02em',
+                fontFamily: 'monospace', fontSize: isMobile ? 64 : 88, lineHeight: 1, letterSpacing: '0.02em',
                 color: ink, marginTop: 4, opacity: isPaused ? 0.5 : 1,
               }}>
                 {formatTime(timeLeft)}
@@ -343,7 +345,7 @@ export default function SessionScreen() {
             </div>
 
             {/* Fleet visualization */}
-            <div style={{ position: 'relative', height: 220, marginTop: 8, overflow: 'visible' }}>
+            <div style={{ position: 'relative', height: isMobile ? 150 : 220, marginTop: 8, overflow: 'visible' }}>
               {/* Dashed flight path line */}
               <div style={{
                 position: 'absolute', left: '5%', right: '5%', top: '50%',
@@ -431,7 +433,7 @@ export default function SessionScreen() {
             </div>
 
             {/* Action buttons */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               {/* Pause / Resume — host only */}
               <button
                 onClick={isHost ? (isPaused ? handleResume : handlePause) : undefined}
@@ -483,8 +485,9 @@ export default function SessionScreen() {
 
           {/* Right: fleet sidebar */}
           <div style={{
-            padding: 20, background: paper2,
-            borderLeft: `2px solid ${ink}`,
+            padding: isMobile ? '12px 16px' : 20, background: paper2,
+            borderLeft: isMobile ? 'none' : `2px solid ${ink}`,
+            borderTop: isMobile ? `2px solid ${ink}` : 'none',
             display: 'flex', flexDirection: 'column', gap: 12,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

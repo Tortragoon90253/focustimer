@@ -1,8 +1,9 @@
 import { saveUid } from '../utils/uid'
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { signInAnonymously } from 'firebase/auth'
-import { doc, setDoc, getDoc, onSnapshot, query, collection, where, limit, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, getDocs, onSnapshot, query, collection, where, limit, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import SketchShip, { SHIP_COLORS } from '../components/SketchShip'
 
@@ -16,6 +17,8 @@ const labelTiny = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTra
 
 const FOCUS_PRESETS = [15, 25, 30, 45, 60]
 const ROUND_OPTIONS = [null, 1, 2, 3, 4, 5]
+const MAX_CREW_OPTIONS = [2, 4, 6, 8, 12]
+const MAX_GLOBAL_SESSIONS = 8
 
 function generateCode(words) {
   return words[Math.floor(Math.random() * words.length)] + '-' + Math.floor(Math.random() * 900 + 100)
@@ -46,6 +49,7 @@ export default function MissionHubScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const pilot = location.state ?? {}
+  const { isMobile } = useWindowSize()
 
   const [uid, setUid] = useState(null)
   const [teamCode, setTeamCode] = useState(null)
@@ -56,6 +60,7 @@ export default function MissionHubScreen() {
   const [missionName, setMissionName] = useState('')
   const [focusDuration, setFocusDuration] = useState(25)
   const [totalRounds, setTotalRounds] = useState(null)
+  const [maxCrew, setMaxCrew] = useState(8)
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -166,7 +171,13 @@ export default function MissionHubScreen() {
   const shipColor = SHIP_COLORS[colorIndex]
 
   async function joinMission(code, sessionStatus = 'lobby') {
-    if (!uid) return
+    if (!uid) return 'error'
+    const mSnap = await getDoc(doc(db, 'missions', code))
+    if (!mSnap.exists()) return 'not_found'
+    const cap = mSnap.data().maxCrew ?? 8
+    const crewSnap = await getDocs(collection(db, 'missions', code, 'crew'))
+    const alreadyIn = crewSnap.docs.some(d => d.id === uid)
+    if (!alreadyIn && crewSnap.size >= cap) return 'full'
     await setDoc(doc(db, 'missions', code, 'crew', uid), {
       name: pilotName, shipKind, shipColorIndex: colorIndex,
       status: sessionStatus === 'lobby' ? 'ready' : 'focusing',
@@ -176,12 +187,22 @@ export default function MissionHubScreen() {
     if (sessionStatus === 'active') navigate(`/session/${code}`, { state: { uid } })
     else if (sessionStatus === 'break') navigate(`/break/${code}`, { state: { uid } })
     else navigate(`/lobby/${code}`, { state: { uid } })
+    return 'ok'
   }
 
   async function handleCreateSession() {
     if (!uid) return
     setCreateLoading(true); setCreateError('')
     try {
+      const activeSnap = await getDocs(query(
+        collection(db, 'missions'),
+        where('status', 'in', ['lobby', 'active', 'break'])
+      ))
+      if (activeSnap.size >= MAX_GLOBAL_SESSIONS) {
+        setCreateError(`ระบบมีผู้ใช้งานเต็มแล้ว (${MAX_GLOBAL_SESSIONS} sessions พร้อมกัน) กรุณาลองใหม่ภายหลัง`)
+        setCreateLoading(false)
+        return
+      }
       const code = missionCodeRef.current
       await setDoc(doc(db, 'missions', code), {
         missionName: missionName.trim() || 'Focus Session',
@@ -190,6 +211,7 @@ export default function MissionHubScreen() {
         focusDuration, breakDuration: 5,
         totalRounds: totalRounds ?? null,
         teamCode: teamCode ?? null,
+        maxCrew,
       })
       await joinMission(code)
     } catch (e) {
@@ -207,7 +229,8 @@ export default function MissionHubScreen() {
       const snap = await getDoc(doc(db, 'missions', code))
       if (!snap.exists()) { setJoinError(`ไม่พบ Mission "${code}"`); setJoinLoading(false); return }
       if (snap.data().status === 'ended') { setJoinError('ภารกิจนี้จบไปแล้ว'); setJoinLoading(false); return }
-      await joinMission(code)
+      const result = await joinMission(code, snap.data().status)
+      if (result === 'full') setJoinError(`ห้องเต็มแล้ว! (max ${snap.data().maxCrew ?? 8} คน)`)
     } catch (e) {
       setJoinError('เกิดข้อผิดพลาด กรุณาลองใหม่')
       console.error(e)
@@ -287,7 +310,7 @@ export default function MissionHubScreen() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 980 }}>
 
         {/* Chrome bar */}
@@ -307,14 +330,14 @@ export default function MissionHubScreen() {
 
         {/* Main 2-column */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 380px',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px',
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
-          minHeight: 560,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
+          minHeight: isMobile ? 'auto' : 560,
         }}>
 
           {/* ===== LEFT: Create session ===== */}
-          <div style={{ padding: 28, background: paper, display: 'flex', flexDirection: 'column', gap: 20, borderRight: `2px solid ${ink}` }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper, display: 'flex', flexDirection: 'column', gap: 20, borderRight: isMobile ? 'none' : `2px solid ${ink}` }}>
 
             <div>
               <div style={labelTiny}>STEP 2 OF 2</div>
@@ -366,6 +389,16 @@ export default function MissionHubScreen() {
               </div>
             </div>
 
+            {/* Max crew */}
+            <div>
+              <div style={labelTiny}>จำนวนสมาชิกสูงสุด</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                {MAX_CREW_OPTIONS.map(n => (
+                  <Chip key={n} label={`${n} คน`} active={maxCrew === n} onClick={() => setMaxCrew(n)} />
+                ))}
+              </div>
+            </div>
+
             <div style={{ flex: 1 }} />
 
             {/* Summary preview */}
@@ -376,7 +409,7 @@ export default function MissionHubScreen() {
               lineHeight: 1.6,
             }}>
               📋 {missionName || 'Focus Session'} · {focusDuration}′ ×{' '}
-              {totalRounds === null ? '∞' : totalRounds} รอบ
+              {totalRounds === null ? '∞' : totalRounds} รอบ · max {maxCrew} คน
               {teamCode && teamData ? ` · 🏷 ${teamData.name}` : ''}
             </div>
 
@@ -411,7 +444,7 @@ export default function MissionHubScreen() {
           </div>
 
           {/* ===== RIGHT: Join + Public Sessions + Team ===== */}
-          <div style={{ padding: 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+          <div style={{ padding: isMobile ? 16 : 28, background: paper2, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', borderTop: isMobile ? `2px solid ${ink}` : 'none' }}>
 
             {/* Join by code */}
             <div>
@@ -495,11 +528,14 @@ export default function MissionHubScreen() {
                             </span>
                           </div>
                           <div style={{ fontFamily: hand, fontSize: 12, color: muted, marginTop: 1 }}>
-                            {s.focusDuration}′ × {s.totalRounds ?? '∞'} · <span style={{ fontFamily: 'monospace' }}>{s.id}</span>
+                            {s.focusDuration}′ × {s.totalRounds ?? '∞'} · max {s.maxCrew ?? 8} คน · <span style={{ fontFamily: 'monospace' }}>{s.id}</span>
                           </div>
                         </div>
                         <button
-                          onClick={() => joinMission(s.id, s.status)}
+                          onClick={async () => {
+                            const result = await joinMission(s.id, s.status)
+                            if (result === 'full') setJoinError(`ห้อง "${s.missionName || s.id}" เต็มแล้ว! (max ${s.maxCrew ?? 8} คน)`)
+                          }}
                           style={{
                             marginLeft: 8, flexShrink: 0,
                             padding: '5px 12px', fontFamily: hand, fontSize: 15,
@@ -758,13 +794,8 @@ export default function MissionHubScreen() {
                           </div>
                           <button
                             onClick={async () => {
-                              if (!uid) return
-                              await setDoc(doc(db, 'missions', s.id, 'crew', uid), {
-                                name: pilotName, shipKind, shipColorIndex: colorIndex,
-                                status: 'ready', sessionsCompleted: 0, totalFocusMinutes: 0,
-                                joinedAt: serverTimestamp(),
-                              })
-                              navigate(`/lobby/${s.id}`, { state: { uid } })
+                              const result = await joinMission(s.id, 'lobby')
+                              if (result === 'full') setJoinError(`ห้อง "${s.missionName || s.id}" เต็มแล้ว! (max ${s.maxCrew ?? 8} คน)`)
                             }}
                             style={{
                               padding: '6px 14px', fontFamily: hand, fontSize: 16,

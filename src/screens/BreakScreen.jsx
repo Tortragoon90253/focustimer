@@ -1,9 +1,11 @@
 import { loadUid } from '../utils/uid'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useWindowSize } from '../hooks/useWindowSize'
 import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, query, orderBy, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
+import MiniGameHub from '../components/games/MiniGameHub'
 
 const ink = '#1a1a1a'
 const paper = '#faf6ee'
@@ -26,6 +28,7 @@ export default function BreakScreen() {
   const [newMsg, setNewMsg] = useState('')
   const [timeLeft, setTimeLeft] = useState(null)
   const [totalSeconds, setTotalSeconds] = useState(null)
+  const [showGame, setShowGame] = useState(false)
   const chatEndRef = useRef(null)
   const breakEndFiredRef = useRef(false)
 
@@ -106,6 +109,16 @@ export default function BreakScreen() {
     setNewMsg('')
   }
 
+  const postToChat = useCallback(async (text) => {
+    const me = crew.find(m => m.id === uid)
+    await addDoc(collection(db, 'missions', missionCode, 'chat'), {
+      text, authorId: uid,
+      authorName: me?.name ?? 'System',
+      authorColorIndex: me?.shipColorIndex ?? 0,
+      createdAt: serverTimestamp(),
+    })
+  }, [uid, crew, missionCode])
+
   const formatTime = (secs) => {
     if (secs == null) return '--:--'
     const m = Math.floor(secs / 60).toString().padStart(2, '0')
@@ -113,11 +126,12 @@ export default function BreakScreen() {
     return `${m}:${s}`
   }
 
+  const { isMobile } = useWindowSize()
   const isHost = mission?.hostId === uid
   const myData = crew.find(m => m.id === uid)
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center', padding: isMobile ? 12 : 24 }}>
       <div style={{ width: '100%', maxWidth: 1000 }}>
 
         {/* Chrome bar */}
@@ -135,15 +149,15 @@ export default function BreakScreen() {
 
         {/* Main 2-column layout */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 360px',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 360px',
           border: `2px solid ${ink}`, borderRadius: '0 0 10px 10px',
-          overflow: 'hidden', boxShadow: `5px 5px 0 ${ink}`,
-          minHeight: 520,
+          overflow: 'hidden', boxShadow: `4px 4px 0 ${ink}`,
+          minHeight: isMobile ? 'auto' : 520,
         }}>
 
           {/* Left: timer + ships parked */}
           <div style={{
-            padding: 28, background: paper,
+            padding: isMobile ? 16 : 28, background: paper,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
             gap: 20, textAlign: 'center',
@@ -152,107 +166,92 @@ export default function BreakScreen() {
             <div style={labelTiny}>PIT STOP · ยานจอดพัก</div>
 
             {/* Big timer */}
-            <div style={{ fontFamily: 'monospace', fontSize: 84, lineHeight: 1, color: ink }}>
+            <div style={{ fontFamily: 'monospace', fontSize: isMobile ? 60 : 84, lineHeight: 1, color: ink }}>
               {formatTime(timeLeft)}
             </div>
 
-            {/* Ship parking pad */}
-            <div style={{ position: 'relative', width: '100%', maxWidth: 360, height: 180, marginTop: 8 }}>
-              {/* Ground with curved top */}
-              <div style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, height: 44,
-                background: paper2,
-                borderTop: `2px solid ${ink}`,
-                borderRadius: '50% 50% 0 0 / 100% 100% 0 0',
-              }} />
-
-              {/* Parked ships */}
-              {crew.map((member, idx) => {
-                const color = SHIP_COLORS[member.shipColorIndex ?? idx % SHIP_COLORS.length]
-                const kind = member.shipKind ?? SHIP_KINDS[idx % SHIP_KINDS.length]
-                const isMe = member.id === uid
-                const spacing = Math.min(80, 320 / Math.max(crew.length, 1))
-                const startX = (360 - spacing * crew.length) / 2 + spacing * idx + spacing / 2 - 24
-                return (
-                  <div
-                    key={member.id}
-                    style={{
-                      position: 'absolute',
-                      bottom: 20,
-                      left: Math.max(10, Math.min(startX, 300)),
-                      textAlign: 'center',
-                    }}
-                  >
-                    <SketchShip kind={kind} size={isMe ? 54 : 46} color={color} />
-                    <div style={{ fontFamily: hand, fontSize: 13, color: isMe ? ink : muted, marginTop: 2 }}>
-                      {member.name}
-                    </div>
+            {/* Game hub or ship parking */}
+            {showGame
+              ? (
+                <div style={{ width: '100%', maxWidth: 360 }}>
+                  <MiniGameHub
+                    missionCode={missionCode}
+                    uid={uid}
+                    crew={crew}
+                    isHost={isHost}
+                    postToChat={postToChat}
+                  />
+                </div>
+              )
+              : (
+                <>
+                  {/* Ship parking pad */}
+                  <div style={{ position: 'relative', width: '100%', maxWidth: 360, height: 180, marginTop: 8 }}>
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0, height: 44,
+                      background: paper2, borderTop: `2px solid ${ink}`,
+                      borderRadius: '50% 50% 0 0 / 100% 100% 0 0',
+                    }} />
+                    {crew.map((member, idx) => {
+                      const color = SHIP_COLORS[member.shipColorIndex ?? idx % SHIP_COLORS.length]
+                      const kind = member.shipKind ?? SHIP_KINDS[idx % SHIP_KINDS.length]
+                      const isMe = member.id === uid
+                      const spacing = Math.min(80, 320 / Math.max(crew.length, 1))
+                      const startX = (360 - spacing * crew.length) / 2 + spacing * idx + spacing / 2 - 24
+                      return (
+                        <div key={member.id} style={{ position: 'absolute', bottom: 20, left: Math.max(10, Math.min(startX, 300)), textAlign: 'center' }}>
+                          <SketchShip kind={kind} size={isMe ? 54 : 46} color={color} />
+                          <div style={{ fontFamily: hand, fontSize: 13, color: isMe ? ink : muted, marginTop: 2 }}>{member.name}</div>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
-            </div>
+
+                  {/* Crew count chip */}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 14px', border: `1.5px solid oklch(0.70 0.14 150)`, borderRadius: 20, fontFamily: hand, fontSize: 16, color: 'oklch(0.70 0.14 150)', background: 'rgba(100,200,150,0.08)' }}>
+                    {crew.length}/{crew.length} พักอยู่
+                  </div>
+
+                  {myData && (
+                    <div style={{ fontFamily: hand, fontSize: 16, color: muted }}>
+                      session ที่ผ่านมา: <span style={{ color: ink, fontWeight: 700 }}>{myData.sessionsCompleted ?? 0}</span>
+                    </div>
+                  )}
+                </>
+              )
+            }
 
             {/* Buttons */}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
               {isHost && (
                 <>
-                  <button
-                    onClick={handleBreakEnd}
-                    style={{
-                      padding: '10px 20px', fontFamily: hand, fontSize: 20,
-                      border: `2px solid ${ink}`, borderRadius: 8,
-                      background: ink, color: paper, cursor: 'pointer',
-                      boxShadow: `3px 3px 0 oklch(0.62 0.14 260)`,
-                    }}
-                  >
+                  <button onClick={handleBreakEnd} style={{ padding: '10px 20px', fontFamily: hand, fontSize: 20, border: `2px solid ${ink}`, borderRadius: 8, background: ink, color: paper, cursor: 'pointer', boxShadow: `3px 3px 0 oklch(0.62 0.14 260)` }}>
                     พร้อมบินต่อ ✓
                   </button>
-                  <button
-                    onClick={endMission}
-                    style={{
-                      padding: '10px 20px', fontFamily: hand, fontSize: 20,
-                      border: `2px solid ${ink}`, borderRadius: 8,
-                      background: 'transparent', color: ink, cursor: 'pointer',
-                      boxShadow: `3px 3px 0 ${ink}`,
-                    }}
-                  >
+                  <button onClick={endMission} style={{ padding: '10px 20px', fontFamily: hand, fontSize: 20, border: `2px solid ${ink}`, borderRadius: 8, background: 'transparent', color: ink, cursor: 'pointer', boxShadow: `3px 3px 0 ${ink}` }}>
                     จบภารกิจ
                   </button>
                 </>
               )}
               {!isHost && (
-                <div style={{ fontFamily: hand, fontSize: 18, color: muted }}>
-                  รอ host เริ่มรอบต่อไป...
-                </div>
+                <div style={{ fontFamily: hand, fontSize: 18, color: muted }}>รอ host เริ่มรอบต่อไป...</div>
               )}
+              <button
+                onClick={() => setShowGame(g => !g)}
+                style={{ padding: '10px 20px', fontFamily: hand, fontSize: 20, border: `2px solid ${showGame ? 'oklch(0.62 0.14 260)' : ink}`, borderRadius: 8, background: showGame ? 'oklch(0.62 0.14 260)' : 'transparent', color: showGame ? paper : ink, cursor: 'pointer', boxShadow: `3px 3px 0 ${ink}` }}
+              >
+                {showGame ? '✕ ปิดเกม' : '🎮 เกม'}
+              </button>
             </div>
-
-            {/* Crew count chip */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '4px 14px',
-              border: `1.5px solid oklch(0.70 0.14 150)`,
-              borderRadius: 20,
-              fontFamily: hand, fontSize: 16,
-              color: 'oklch(0.70 0.14 150)',
-              background: 'rgba(100,200,150,0.08)',
-            }}>
-              {crew.length}/{crew.length} พักอยู่
-            </div>
-
-            {/* Sessions done */}
-            {myData && (
-              <div style={{ fontFamily: hand, fontSize: 16, color: muted }}>
-                session ที่ผ่านมา: <span style={{ color: ink, fontWeight: 700 }}>{myData.sessionsCompleted ?? 0}</span>
-              </div>
-            )}
           </div>
 
           {/* Right: chat sidebar */}
           <div style={{
-            borderLeft: `2px solid ${ink}`,
+            borderLeft: isMobile ? 'none' : `2px solid ${ink}`,
+            borderTop: isMobile ? `2px solid ${ink}` : 'none',
             background: paper2,
             display: 'flex', flexDirection: 'column',
+            minHeight: isMobile ? 320 : 'auto',
           }}>
             {/* Chat header */}
             <div style={{ padding: '12px 16px', borderBottom: `1.5px solid ${ink}` }}>
