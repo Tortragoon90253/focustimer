@@ -789,8 +789,9 @@ export default function MissionHubScreen() {
           <button
             onClick={() => navigate('/admin')}
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'rgba(0,0,0,0.2)', fontSize: 11,
+              background: 'none', border: '1px solid rgba(0,0,0,0.25)', cursor: 'pointer',
+              color: 'rgba(0,0,0,0.55)', fontSize: 12, borderRadius: 6,
+              padding: '5px 14px',
               letterSpacing: '0.12em', textTransform: 'uppercase',
               fontFamily: "'Space Grotesk', sans-serif",
             }}
