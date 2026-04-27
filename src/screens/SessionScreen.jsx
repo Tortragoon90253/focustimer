@@ -2,6 +2,7 @@ import { loadUid } from '../utils/uid'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useWindowSize } from '../hooks/useWindowSize'
+import { useFocusTracking } from '../hooks/useFocusTracking'
 import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, increment, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import SketchShip, { SHIP_COLORS, SHIP_KINDS } from '../components/SketchShip'
@@ -14,6 +15,15 @@ const muted = '#999'
 const hand = "'Caveat', cursive"
 
 const labelTiny = { fontSize: 11, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase' }
+
+function getFocusDot(member) {
+  if (!member.focusStatus) return { bg: 'oklch(0.70 0.14 150)', label: '' }
+  const lastSeen = member.focusLastSeen?.toDate?.()
+  const isAFK = !lastSeen || Date.now() - lastSeen.getTime() > 60_000
+  if (isAFK) return { bg: '#e74c3c', label: 'afk' }
+  if (member.focusStatus === 'unfocused') return { bg: '#f39c12', label: 'away' }
+  return { bg: 'oklch(0.70 0.14 150)', label: '' }
+}
 
 const TRACKS = [
   { id: 'none',          label: '🔇 ปิด',        file: null },
@@ -279,6 +289,8 @@ export default function SessionScreen() {
   const { isMobile } = useWindowSize()
   const isHost = mission?.hostId === uid
   const isPaused = mission?.isPaused ?? false
+
+  useFocusTracking({ uid, missionCode, isActive: mission?.status === 'active', addToast })
   const progress = totalSeconds && timeLeft != null ? 1 - (timeLeft / totalSeconds) : 0
   progressRef.current = progress
   const focusingCrew = crew.filter(m => m.status === 'focusing')
@@ -516,9 +528,17 @@ export default function SessionScreen() {
                       <SketchShip kind={kind} size={28} color={color} />
                       <span style={{ fontFamily: hand, fontSize: 18, color: ink }}>{member.name}</span>
                     </div>
-                    <span style={{ ...labelTiny, letterSpacing: '0.08em' }}>
-                      {member.status === 'focusing' ? 'focused' : member.status}
-                    </span>
+                    {(() => {
+                      const dot = getFocusDot(member)
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: dot.bg, flexShrink: 0 }} />
+                          <span style={{ ...labelTiny, letterSpacing: '0.08em', color: dot.label ? dot.bg : muted }}>
+                            {dot.label || (member.status === 'focusing' ? 'on' : member.status)}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
